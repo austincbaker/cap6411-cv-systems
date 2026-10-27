@@ -284,7 +284,7 @@ def test_webcam_records_observed_settings_not_requested_ones():
     assert (info.requested_width, info.requested_height, info.requested_fps) == (1920, 1080, 60)
     assert (info.observed_width, info.observed_height) == (640, 480)
     assert (frame.width, frame.height) == (640, 480)
-    assert info.observed_fps is None  # backend reported 0 fps: recorded as unknown, not 0
+    assert info.reported_fps is None  # backend reported 0 fps: recorded as unknown, not 0
     assert info.buffer_size_accepted is False
     assert any("requested width 1920" in note for note in info.notes)
     assert factory.calls == [(0, cv2.CAP_ANY)]

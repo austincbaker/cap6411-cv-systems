@@ -237,7 +237,7 @@ class JsonlWriter:
         self.lines = 0
 
     def write(self, record: dict) -> None:
-        line = json.dumps(record, default=_json_default)
+        line = json.dumps(record, default=str)
         with self._lock:
             if self._file.closed:
                 return
@@ -248,16 +248,6 @@ class JsonlWriter:
     def close(self) -> None:
         with self._lock:
             self._file.close()
-
-
-def _json_default(value: Any) -> Any:
-    if isinstance(value, (np.integer,)):
-        return int(value)
-    if isinstance(value, (np.floating,)):
-        return float(value)
-    if hasattr(value, "value") and isinstance(getattr(value, "value"), str):
-        return value.value
-    return str(value)
 
 
 class LatestFrameSlot:
@@ -357,7 +347,6 @@ class BaselineRun:
         self.manifest: dict = {}
         self.times: dict[str, Optional[float]] = {
             "host_run_start_s": None,
-            "host_first_frame_s": None,
             "host_tick_origin_s": None,
             "host_run_end_s": None,
         }
@@ -538,7 +527,6 @@ class BaselineRun:
             if self.slot.closed.is_set():
                 return
         tick_origin = time.monotonic()
-        self.times["host_first_frame_s"] = self.slot.latest().host_capture_s
         self.times["host_tick_origin_s"] = tick_origin
         end_at = tick_origin + self.config.duration_s if self.config.duration_s else None
         tick_index = 0
@@ -662,7 +650,7 @@ class BaselineRun:
 
         self.times["host_run_end_s"] = time.monotonic()
         self.manifest = self._build_manifest(exit_code)
-        (self.run_dir / "manifest.json").write_text(json.dumps(self.manifest, indent=2, default=_json_default) + "\n")
+        (self.run_dir / "manifest.json").write_text(json.dumps(self.manifest, indent=2, default=str) + "\n")
         for log in (self.requests_log, self.drops_log, self.telemetry_log):
             log.close()
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
@@ -704,9 +692,7 @@ class BaselineRun:
                 **self.state.counts,
                 "frames_delivered": info["frames_delivered"],
                 "source_drops": info["drop_counts"],
-                "requests_logged": self.requests_log.lines,
-                "drops_logged": self.drops_log.lines,
-                "telemetry_samples_logged": self.telemetry_log.lines,
+                "telemetry_samples": self.telemetry_log.lines,
             },
             "display": {"enabled": not self.config.no_display, "note": self.display_note},
             "threads_not_joined": [t.name for t in self.threads if t.is_alive()],

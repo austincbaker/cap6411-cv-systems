@@ -42,6 +42,7 @@ from .frame import (
     Frame,
     SourceBase,
     SourceOpenError,
+    backend_name,
     frame_is_empty,
     release_quietly,
     valid_fps,
@@ -87,7 +88,6 @@ class ReplaySource(SourceBase):
     def _open(self) -> None:
         self._reset_run_state()
         info = self.info
-        info.opencv_version = cv2.__version__
 
         if not os.path.isfile(self.path):
             raise SourceOpenError(f"video file not found: {self.path}")
@@ -97,13 +97,14 @@ class ReplaySource(SourceBase):
             raise SourceOpenError(f"could not open video for decoding: {self.path}")
         self._capture = capture
 
-        info.backend = _backend_name(capture)
+        info.backend = backend_name(capture)
         fps = _finite_or_none(capture.get(cv2.CAP_PROP_FPS))
-        info.reported_fps = fps
         count = _finite_or_none(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         info.reported_frame_count = int(count) if count is not None and count > 0 else None
         self._fps = fps if valid_fps(fps) else None
-        info.observed_fps = self._fps
+        info.reported_fps = self._fps
+        if self._fps is None:
+            info.notes.append(f"backend reported unusable fps {fps!r}")
 
         ok, first = capture.read()
         if not ok or frame_is_empty(first):
@@ -263,9 +264,3 @@ def _finite_or_none(value: Any) -> Optional[float]:
         return None
     return value if math.isfinite(value) else None
 
-
-def _backend_name(capture: Any) -> Optional[str]:
-    try:
-        return str(capture.getBackendName())
-    except Exception:
-        return None
