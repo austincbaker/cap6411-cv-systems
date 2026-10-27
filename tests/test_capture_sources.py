@@ -111,6 +111,15 @@ def test_valid_media_timestamps_do_not_need_valid_fps(placeholder_path):
     assert [f.source_time_s for f in frames] == pytest.approx([0.0, 0.04, 0.08, 0.12])
 
 
+def test_missing_media_timestamp_is_counted_once(placeholder_path):
+    clock = FakeClock()
+    capture = FakeVideoCapture([solid_frame(i) for i in range(4)], timestamps_ms=[0, 100, math.nan, 300])
+    with make_replay(placeholder_path, capture, clock) as source:
+        frames = list(source)
+    assert [f.source_time_s for f in frames] == pytest.approx([0.0, 0.1, 0.1, 0.3])
+    assert source.info.nonmonotonic_timestamps == 1
+
+
 # --------------------------------------------------------------------------- replay outcomes
 
 
