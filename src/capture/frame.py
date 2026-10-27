@@ -84,22 +84,18 @@ class SourceInfo:
     source_kind: str
     source_id: str
     backend: Optional[str] = None
-    opencv_version: Optional[str] = None
     time_method: Optional[str] = None  # "media_pos_msec" | "frame_index_over_fps" | "none_host_capture_only"
     cfr_assumed: bool = False  # True when source time is frame_index / fps
-    reported_fps: Optional[float] = None
+    reported_fps: Optional[float] = None  # CAP_PROP_FPS after open; None if missing or invalid
     reported_frame_count: Optional[int] = None
     requested_width: Optional[int] = None
     requested_height: Optional[int] = None
     requested_fps: Optional[float] = None
     observed_width: Optional[int] = None
     observed_height: Optional[int] = None
-    observed_fps: Optional[float] = None  # what CAP_PROP_FPS reports after open
     measured_fps: Optional[float] = None  # delivered frames / host elapsed, filled at close
-    buffer_size_requested: Optional[int] = None
-    buffer_size_accepted: Optional[bool] = None
+    buffer_size_accepted: Optional[bool] = None  # webcam: whether CAP_PROP_BUFFERSIZE=1 was honored
     frames_delivered: int = 0
-    frames_dropped: int = 0
     drop_counts: dict[str, int] = field(default_factory=dict)
     nonmonotonic_timestamps: int = 0
     notes: list[str] = field(default_factory=list)
@@ -118,6 +114,13 @@ def valid_fps(fps: Optional[float]) -> bool:
 
 def frame_is_empty(image: Optional[np.ndarray]) -> bool:
     return image is None or not isinstance(image, np.ndarray) or image.size == 0 or image.ndim < 2
+
+
+def backend_name(capture: Any) -> Optional[str]:
+    try:
+        return str(capture.getBackendName())
+    except Exception:
+        return None
 
 
 def release_quietly(capture: Any) -> None:
@@ -250,7 +253,6 @@ class SourceBase:
         return frame_id
 
     def _record_drop(self, frame_id: int, reason: str, detail: str = "") -> None:
-        self.info.frames_dropped += 1
         self.info.drop_counts[reason] = self.info.drop_counts.get(reason, 0) + 1
         if self._on_drop is not None:
             self._on_drop(frame_id, reason, self._clock(), detail)
