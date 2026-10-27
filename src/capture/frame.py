@@ -69,27 +69,12 @@ class SourceEnd:
 @dataclass(frozen=True)
 class Frame:
     source_kind: str
-    source_id: str
     frame_id: int
     image: np.ndarray = field(repr=False)
     width: int
     height: int
     source_time_s: Optional[float]
     host_capture_s: float
-    host_deadline_s: Optional[float] = None  # replay pacing deadline; None for webcam
-
-    def as_record(self) -> dict[str, Any]:
-        """Loggable fields (everything except the pixels)."""
-        return {
-            "source_kind": self.source_kind,
-            "source_id": self.source_id,
-            "frame_id": self.frame_id,
-            "width": self.width,
-            "height": self.height,
-            "source_time_s": self.source_time_s,
-            "host_capture_s": self.host_capture_s,
-            "host_deadline_s": self.host_deadline_s,
-        }
 
 
 @dataclass
@@ -270,8 +255,7 @@ class SourceBase:
         if self._on_drop is not None:
             self._on_drop(frame_id, reason, self._clock(), detail)
 
-    def _deliver(self, frame_id: int, image: np.ndarray, source_time_s: Optional[float],
-                 host_deadline_s: Optional[float] = None) -> Frame:
+    def _deliver(self, frame_id: int, image: np.ndarray, source_time_s: Optional[float]) -> Frame:
         host_capture_s = self._clock()
         if self._first_capture_s is None:
             self._first_capture_s = host_capture_s
@@ -279,14 +263,12 @@ class SourceBase:
         self.info.frames_delivered += 1
         return Frame(
             source_kind=self.kind,
-            source_id=self.source_id,
             frame_id=frame_id,
             image=image,
             width=int(image.shape[1]),
             height=int(image.shape[0]),
             source_time_s=source_time_s,
             host_capture_s=host_capture_s,
-            host_deadline_s=host_deadline_s,
         )
 
     def _finish(self, reason: EndReason, detail: str = "", complete: Optional[bool] = None) -> None:

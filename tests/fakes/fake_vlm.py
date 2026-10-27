@@ -14,7 +14,7 @@ from __future__ import annotations
 import itertools
 import threading
 import time
-from typing import Callable, Optional, Sequence
+from typing import Callable, Sequence
 
 from app.main import InferenceResult
 

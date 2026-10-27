@@ -46,7 +46,7 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Sequence
 
 import cv2
 import numpy as np
@@ -80,7 +80,6 @@ class InferenceResult:
     usage: Optional[dict] = None
 
 
-@runtime_checkable
 class InferenceClient(Protocol):
     def describe(
         self, *, image_jpeg: bytes, prompt: str, max_tokens: int, frame_id: int, request_id: str
@@ -89,7 +88,6 @@ class InferenceClient(Protocol):
     def close(self) -> None: ...
 
 
-@runtime_checkable
 class TelemetryMonitor(Protocol):
     """``sample()`` returns one dict per sensor reading, e.g.
     {sensor_id, domain, quantity, raw_value, raw_unit, value, unit, host_time_s, valid, error}.
@@ -330,11 +328,9 @@ class BaselineRun:
         source_factory: Optional[Callable[..., SourceBase]] = None,
         client: Optional[InferenceClient] = None,
         telemetry: Optional[TelemetryMonitor] = None,
-        clock: Callable[[], float] = time.monotonic,
         argv: Optional[Sequence[str]] = None,
     ) -> None:
         self.config = config
-        self.clock = clock
         self.argv = list(argv) if argv is not None else None
         # Build backends before touching the filesystem so config errors leave nothing behind.
         self.client = client if client is not None else build_client(config)
@@ -368,7 +364,7 @@ class BaselineRun:
 
     # -- entry -------------------------------------------------------------
     def run(self) -> RunResult:
-        self.times["host_run_start_s"] = self.clock()
+        self.times["host_run_start_s"] = time.monotonic()
         self.started_wall_utc = dt.datetime.now(dt.timezone.utc).isoformat()
         exit_code = 1
         interrupted = False
@@ -435,18 +431,18 @@ class BaselineRun:
             "host_capture_s": frame.host_capture_s,
             "host_tick_s": host_tick_s,
         }
-        encode_start = self.clock()
+        encode_start = time.monotonic()
         try:
             jpeg, width, height = encode_jpeg(frame.image, self.config.jpeg_quality, self.config.max_image_side)
         except Exception as exc:
-            now = self.clock()
+            now = time.monotonic()
             record.update(
                 host_request_start_s=None, host_response_available_s=now, duration_s=None,
                 encode_s=now - encode_start, image_bytes=None, image_width=None, image_height=None,
                 status="encode_error", text=None, error_type=type(exc).__name__, error_detail=str(exc), usage=None,
             )
             return record
-        host_request_start_s = self.clock()
+        host_request_start_s = time.monotonic()
         try:
             result = self.client.describe(
                 image_jpeg=jpeg,
@@ -463,7 +459,7 @@ class BaselineRun:
         except Exception as exc:
             status, text, usage = "client_exception", None, None
             error_type, error_detail = type(exc).__name__, str(exc)
-        host_response_available_s = self.clock()
+        host_response_available_s = time.monotonic()
         if status == "ok" and not (isinstance(text, str) and text.strip()):
             status, error_type, error_detail = "empty", error_type or "blank_text", "status ok but no text"
         record.update(
@@ -484,16 +480,16 @@ class BaselineRun:
 
     def _telemetry_loop(self) -> None:
         interval = self.config.telemetry_interval_s
-        next_t = self.clock()
+        next_t = time.monotonic()
         while not self.telemetry_stop.is_set():
             try:
                 samples = list(self.telemetry.sample())
             except Exception as exc:
-                samples = [{"valid": False, "value": None, "error": f"{type(exc).__name__}: {exc}", "host_time_s": self.clock()}]
+                samples = [{"valid": False, "value": None, "error": f"{type(exc).__name__}: {exc}", "host_time_s": time.monotonic()}]
             for sample in samples:
                 self.telemetry_log.write({"schema_version": SCHEMA_VERSION, **sample})
             next_t += interval
-            self.telemetry_stop.wait(max(0.0, next_t - self.clock()))
+            self.telemetry_stop.wait(max(0.0, next_t - time.monotonic()))
 
     # -- logging -----------------------------------------------------------
     def _on_source_drop(self, frame_id: int, reason: str, host_time_s: float, detail: str = "") -> None:
@@ -507,7 +503,7 @@ class BaselineRun:
         self.state.bump(reason)
         self.drops_log.write({
             "schema_version": SCHEMA_VERSION, "origin": "app", "reason": reason,
-            "tick_index": tick_index, "host_tick_s": host_tick_s, "host_time_s": self.clock(),
+            "tick_index": tick_index, "host_tick_s": host_tick_s, "host_time_s": time.monotonic(),
             "frame_id": frame.frame_id if frame else None,
             "source_time_s": frame.source_time_s if frame else None,
             **extra,
@@ -541,7 +537,7 @@ class BaselineRun:
         while not self.slot.first_frame.wait(0.05):
             if self.slot.closed.is_set():
                 return
-        tick_origin = self.clock()
+        tick_origin = time.monotonic()
         self.times["host_first_frame_s"] = self.slot.latest().host_capture_s
         self.times["host_tick_origin_s"] = tick_origin
         end_at = tick_origin + self.config.duration_s if self.config.duration_s else None
@@ -552,7 +548,7 @@ class BaselineRun:
 
         while True:
             self._drain_results()
-            now = self.clock()
+            now = time.monotonic()
             if end_at is not None and now >= end_at and not self.slot.closed.is_set():
                 self.source.stop(EndReason.DURATION_LIMIT)
             if self.slot.closed.is_set():
@@ -585,7 +581,7 @@ class BaselineRun:
                 last_draw = now
                 self._draw()
 
-            wait = max(0.0, min(next_tick - self.clock(), 0.02 if self.display_enabled else 0.05))
+            wait = max(0.0, min(next_tick - time.monotonic(), 0.02 if self.display_enabled else 0.05))
             self._drain_results(timeout=wait)
 
     def _draw(self) -> None:
@@ -594,7 +590,7 @@ class BaselineRun:
             return
         self.display_used = True
         try:
-            cv2.imshow(WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(self.clock())))
+            cv2.imshow(WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(time.monotonic())))
             key = cv2.waitKey(1) & 0xFF
         except cv2.error as exc:
             self.display_enabled = False
@@ -634,9 +630,9 @@ class BaselineRun:
 
         if self.in_flight is not None:
             wait = grace if interrupted else self.config.request_timeout_s + grace
-            deadline = self.clock() + wait
-            while self.in_flight is not None and self.clock() < deadline:
-                self._drain_results(timeout=min(0.05, max(0.0, deadline - self.clock())))
+            deadline = time.monotonic() + wait
+            while self.in_flight is not None and time.monotonic() < deadline:
+                self._drain_results(timeout=min(0.05, max(0.0, deadline - time.monotonic())))
         if self.in_flight is not None:
             self.requests_log.write({
                 "schema_version": SCHEMA_VERSION, **self.in_flight, "status": "abandoned_at_shutdown",
@@ -664,7 +660,7 @@ class BaselineRun:
             except cv2.error:
                 pass
 
-        self.times["host_run_end_s"] = self.clock()
+        self.times["host_run_end_s"] = time.monotonic()
         self.manifest = self._build_manifest(exit_code)
         (self.run_dir / "manifest.json").write_text(json.dumps(self.manifest, indent=2, default=_json_default) + "\n")
         for log in (self.requests_log, self.drops_log, self.telemetry_log):
@@ -735,15 +731,11 @@ def _safe_metadata(obj: Any) -> Optional[dict]:
         return {"error": f"{type(exc).__name__}: {exc}"}
 
 
-def run(config: argparse.Namespace, **kwargs: Any) -> RunResult:
-    return BaselineRun(config, **kwargs).run()
-
-
 def main(argv: Optional[Sequence[str]] = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     config = parse_args(argv)
     try:
-        result = run(config, argv=argv)
+        result = BaselineRun(config, argv=argv).run()
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
