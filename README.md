@@ -25,10 +25,11 @@ python -m app.main --source replay --video clip.mp4 --interval-s 2 --no-display
 python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
 ```
 
-The defaults are `--vlm fake` and `--telemetry fake` (test doubles in
-`tests/fakes/`, synthetic values). `--vlm real` uses a running llama-server
-at `--vlm-url` and exits with an error if none is ready. `--telemetry real`
-exits with a "pending #2" error until #2 lands. Run `python -m app.main -h`
+The app needs a running llama-server at `--vlm-url` (see "Local VLM
+server" below) and exits with an error before creating a run directory if
+none is ready. Telemetry defaults to `--telemetry fake` (a test double in
+`tests/fakes/`, synthetic values); `--telemetry real` exits with a
+"pending #2" error until #2 lands. Run `python -m app.main -h`
 for the full flag list. The flags are a stable interface for the benchmark
 runner (#18); change them only with a note to its owner.
 
@@ -42,9 +43,8 @@ runner (#18); change them only with a note to its owner.
 | `--duration-s N` | until EOF / q / Ctrl-C | stop after N seconds |
 | `--prompt`, `--max-tokens`, `--request-timeout-s` | | request settings |
 | `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
-| `--vlm fake\|real`, `--vlm-url` | `fake`, `http://127.0.0.1:8080` | VLM backend and llama-server address |
+| `--vlm-url` | `http://127.0.0.1:8080` | llama-server address |
 | `--telemetry fake\|real\|off`, `--telemetry-interval-s` | `fake`, `0.5` | telemetry backend |
-| `--fake-vlm-latency-s`, `--fake-vlm-outcomes` | `0.5`, `ok` | fake client behavior, e.g. `ok,timeout,malformed,empty` |
 | `--run-dir PATH` | `runs/<UTC>_<source>/` | output directory (refuses to overwrite) |
 | `--no-display` | | headless run |
 | `--shutdown-timeout-s` | `5` | max wait for threads / in-flight request on Ctrl-C |

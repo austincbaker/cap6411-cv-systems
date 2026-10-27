@@ -26,10 +26,10 @@ Exit codes: 0 completed (EOF, --duration-s, or 'q' in the window), 2 bad
 config / source failed to open / source ended in error, 130 interrupted,
 1 unexpected application error.
 
-``--vlm real`` talks to a running llama-server (``src/vlm/client.py``, #1;
-start the server first, see README). The telemetry monitor (#2) is not
-implemented yet. ``--vlm fake`` / ``--telemetry fake`` use test doubles from
-``tests/fakes`` (run from the repository root).
+The VLM is a running llama-server at ``--vlm-url`` (``src/vlm/client.py``,
+#1; start it first, see README). The telemetry monitor (#2) is not
+implemented yet; ``--telemetry fake`` uses a test double from ``tests/fakes``
+(run from the repository root).
 """
 
 from __future__ import annotations
@@ -57,7 +57,6 @@ from src.vlm.client import InferenceResult, LlamaServerClient
 
 SCHEMA_VERSION = "0-provisional"
 WINDOW_NAME = "cap6411 baseline"
-FAKE_OUTCOMES = ("ok", "timeout", "connection_error", "http_error", "malformed", "empty", "ok_blank", "raise")
 
 
 # ============================================================================ interfaces
@@ -121,6 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m app.main",
         description="Fixed-interval VLM baseline over a webcam or real-time video replay.",
+        allow_abbrev=False,  # e.g. --vlm must not silently mean --vlm-url
     )
     src = parser.add_argument_group("source")
     src.add_argument("--source", choices=("webcam", "replay"), required=True)
@@ -141,16 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
 
     back = parser.add_argument_group("backends")
-    back.add_argument("--vlm", choices=("fake", "real"), default="fake", help="'real' uses a running llama-server at --vlm-url")
-    back.add_argument("--vlm-url", default="http://127.0.0.1:8080", help="llama-server address for --vlm real (default http://127.0.0.1:8080)")
+    back.add_argument("--vlm-url", default="http://127.0.0.1:8080", help="running llama-server address (default http://127.0.0.1:8080)")
     back.add_argument("--telemetry", choices=("fake", "real", "off"), default="fake", help="'real' requires #2 (src/energy/monitor.py)")
     back.add_argument("--telemetry-interval-s", type=positive_float, default=0.5)
-    back.add_argument("--fake-vlm-latency-s", type=nonnegative_float, default=0.5, help="fake client latency per request")
-    back.add_argument(
-        "--fake-vlm-outcomes",
-        default="ok",
-        help=f"comma-separated outcomes the fake client cycles through: {','.join(FAKE_OUTCOMES)}",
-    )
 
     out = parser.add_argument_group("output")
     out.add_argument("--run-dir", help="output directory (default runs/<UTC time>_<source>/); must not already contain files")
@@ -166,11 +159,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--source replay requires --video PATH")
     if args.source == "webcam" and args.video:
         parser.error("--video is only valid with --source replay")
-    outcomes = [o.strip() for o in args.fake_vlm_outcomes.split(",") if o.strip()]
-    unknown = sorted(set(outcomes) - set(FAKE_OUTCOMES))
-    if not outcomes or unknown:
-        parser.error(f"--fake-vlm-outcomes: unknown outcome(s) {unknown}; choose from {','.join(FAKE_OUTCOMES)}")
-    args.fake_vlm_outcomes = outcomes
     return args
 
 
@@ -186,20 +174,10 @@ def build_source(config: argparse.Namespace, on_drop) -> SourceBase:
 
 
 def build_client(config: argparse.Namespace) -> InferenceClient:
-    if config.vlm == "real":
-        client = LlamaServerClient(config.vlm_url, timeout_s=config.request_timeout_s)
-        if not client.health():
-            raise ConfigError(f"--vlm real: no ready llama-server at {config.vlm_url} (start it first; see README)")
-        return client
-    try:
-        from tests.fakes.fake_vlm import FakeVLMClient
-    except ImportError as exc:
-        raise ConfigError(f"--vlm fake needs tests/fakes on the import path; run from the repo root ({exc})")
-    return FakeVLMClient(
-        latency_s=config.fake_vlm_latency_s,
-        outcomes=config.fake_vlm_outcomes,
-        timeout_s=config.request_timeout_s,
-    )
+    client = LlamaServerClient(config.vlm_url, timeout_s=config.request_timeout_s)
+    if not client.health():
+        raise ConfigError(f"no ready llama-server at {config.vlm_url} (start it first; see README)")
+    return client
 
 
 def build_telemetry(config: argparse.Namespace) -> Optional[TelemetryMonitor]:
@@ -656,7 +634,7 @@ class BaselineRun:
             "exit_code": exit_code,
             "error_detail": self.error_detail,
             "source": {"info": info, "end": self.source.end.as_dict() if self.source.end else None},
-            "vlm": {"kind": self.config.vlm, "metadata": _safe_metadata(self.client)},
+            "vlm": _safe_metadata(self.client),
             "telemetry": (
                 {"kind": "off"} if self.telemetry is None
                 else {"kind": self.config.telemetry, "interval_s": self.config.telemetry_interval_s, "metadata": _safe_metadata(self.telemetry)}

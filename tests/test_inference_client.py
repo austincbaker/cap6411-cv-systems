@@ -11,7 +11,7 @@ import time
 import pytest
 
 from src.vlm.client import LlamaServerClient
-from tests.fakes.fake_llama_server import FakeServer, reply
+from tests.fakes.fake_llama_server import DROP, FakeServer, reply
 
 JPEG = b"\xff\xd8fake-jpeg-bytes\xff\xd9"
 
@@ -99,6 +99,12 @@ def test_connection_refused_is_a_connection_error():
     assert result.error_type == "ConnectionRefusedError"
 
 
+def test_dropped_connection_is_a_connection_error(server):
+    server.respond = lambda p, b: DROP
+    result = describe(LlamaServerClient(server.url))
+    assert result.status == "connection_error" and result.text is None
+
+
 def test_non_200_is_an_http_error(server):
     server.respond = lambda p, b: (500, b'{"error": "model crashed"}')
     result = describe(LlamaServerClient(server.url))
@@ -153,6 +159,6 @@ def test_bad_base_url_is_rejected(url):
 
 def test_health(server):
     assert LlamaServerClient(server.url).health() is True
-    server.respond = lambda p, b: (503, b'{"error": "loading model"}')
+    server.healthy = False
     assert LlamaServerClient(server.url).health() is False
     assert LlamaServerClient(f"http://127.0.0.1:{free_port()}", timeout_s=1).health() is False

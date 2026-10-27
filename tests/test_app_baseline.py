@@ -1,4 +1,5 @@
-"""Fixed-interval baseline app checks (fake VLM, fake telemetry, generated clips; no camera or model).
+"""Fixed-interval baseline app checks: real VLM client against a fake llama-server,
+fake telemetry, generated clips. No camera or model needed.
 
 These run in real time on short clips, so timing assertions use tolerances.
 """
@@ -18,9 +19,8 @@ from app.main import BaselineRun, main, parse_args
 from app.state import ObservationState, render_overlay
 from src.capture import EndReason, ReplaySource, WebcamSource
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
-from tests.fakes.fake_llama_server import FakeServer, reply
+from tests.fakes.fake_llama_server import DROP, FakeServer, reply, scripted
 from tests.fakes.fake_telemetry import FakeTelemetry
-from tests.fakes.fake_vlm import FakeVLMClient
 from tests.fakes.video import write_test_video
 
 
@@ -29,8 +29,16 @@ def clip(tmp_path):
     return write_test_video(tmp_path / "clip.avi", frames=40, fps=20.0)  # 2.0 s
 
 
-def config_for(tmp_path, *extra, video=None, name="run"):
-    argv = ["--source", "replay", "--video", str(video), "--no-display", "--run-dir", str(tmp_path / name), *extra]
+@pytest.fixture
+def llama():
+    server = FakeServer(delay_s=0.01)
+    yield server
+    server.stop()
+
+
+def config_for(tmp_path, llama, *extra, video=None, name="run"):
+    argv = ["--source", "replay", "--video", str(video), "--no-display", "--run-dir", str(tmp_path / name),
+            "--vlm-url", llama.url, *extra]
     return parse_args(argv)
 
 
@@ -51,10 +59,10 @@ def run_baseline(config, **kwargs):
 # --------------------------------------------------------------------------- interval
 
 
-def test_changing_interval_changes_invocation_timing(tmp_path, clip):
+def test_changing_interval_changes_invocation_timing(tmp_path, llama, clip):
     counts = {}
     for interval in (0.25, 0.5):
-        config = config_for(tmp_path, "--interval-s", str(interval), "--fake-vlm-latency-s", "0.01",
+        config = config_for(tmp_path, llama, "--interval-s", str(interval),
                             video=clip, name=f"run_{interval}")
         run, result = run_baseline(config)
         assert result.exit_code == 0 and result.manifest["run_end_reason"] == "eof"
@@ -77,16 +85,16 @@ def test_changing_interval_changes_invocation_timing(tmp_path, clip):
 # --------------------------------------------------------------------------- overload
 
 
-def test_slow_request_records_busy_skips_instead_of_a_backlog(tmp_path, clip):
-    client = FakeVLMClient(latency_s=0.6)
-    config = config_for(tmp_path, "--interval-s", "0.2", video=clip)
-    run, result = run_baseline(config, client=client)
+def test_slow_request_records_busy_skips_instead_of_a_backlog(tmp_path, llama, clip):
+    llama.delay_s = 0.6
+    config = config_for(tmp_path, llama, "--interval-s", "0.2", video=clip)
+    run, result = run_baseline(config)
     manifest = result.manifest
     requests = read_jsonl(result.run_dir / "requests.jsonl")
     drops = read_jsonl(result.run_dir / "drops.jsonl")
     busy = [d for d in drops if d["reason"] == "tick_skipped_busy"]
 
-    assert client.max_active == 1
+    assert llama.max_active == 1
     assert 3 <= len(requests) <= 4  # ~2 s / 0.6 s, not one per 0.2 s tick
     assert len(busy) >= 5
     for d in busy:
@@ -107,29 +115,48 @@ def test_slow_request_records_busy_skips_instead_of_a_backlog(tmp_path, clip):
 # --------------------------------------------------------------------------- failures
 
 
-def test_failures_are_logged_and_do_not_replace_confirmed_state(tmp_path, clip):
-    outcomes = ["ok", "timeout", "malformed", "empty", "connection_error", "http_error", "ok_blank", "raise"]
-    client = FakeVLMClient(latency_s=0.02, outcomes=outcomes, timeout_s=0.05)
-    config = config_for(tmp_path, "--interval-s", "0.15", video=clip)
-    run, result = run_baseline(config, client=client)
+def test_failures_are_logged_and_do_not_replace_confirmed_state(tmp_path, llama, clip):
+    llama.respond = scripted(
+        reply(),                     # ok
+        (200, reply()[1], 0.3),      # answers after the 0.1 s client timeout
+        (200, b"not json"),          # malformed
+        reply(text=""),              # empty
+        DROP,                        # connection dropped
+        (500, b'{"error": "boom"}'),  # http error
+        reply(text="   "),           # blank text
+    )
+    config = config_for(tmp_path, llama, "--interval-s", "0.15", "--request-timeout-s", "0.1", video=clip)
+    run, result = run_baseline(config)
     requests = read_jsonl(result.run_dir / "requests.jsonl")
-    assert len(requests) >= len(outcomes)
+    assert len(requests) >= 7
 
-    first = requests[: len(outcomes)]
-    assert [r["status"] for r in first] == [
-        "ok", "timeout", "malformed", "empty", "connection_error", "http_error", "empty", "client_exception",
-    ]
+    first = requests[:7]
+    assert [r["status"] for r in first] == ["ok", "timeout", "malformed", "empty", "connection_error", "http_error", "empty"]
     assert first[0]["text"] and first[0]["error_type"] is None
     for r in first[1:]:
         assert r["text"] is None and r["error_type"]
-    assert first[6]["error_type"] == "blank_text"
-    assert first[7]["error_type"] == "RuntimeError"
+    assert [first[i]["error_type"] for i in (1, 3, 5, 6)] == ["timeout", "empty_text", "http_500", "empty_text"]
 
     oks = [r for r in requests if r["status"] == "ok"]
     assert run.state.confirmed.frame_id == oks[-1]["frame_id"]
     assert run.state.confirmed.text == oks[-1]["text"]
     assert run.state.last_status == requests[-1]["status"]
     assert result.exit_code == 0  # request failures are recorded, not fatal
+
+
+def test_client_exception_is_logged_not_fatal(tmp_path, llama, clip):
+    class Exploding:
+        def describe(self, **kwargs):
+            raise RuntimeError("client blew up")
+
+        def close(self):
+            pass
+
+    config = config_for(tmp_path, llama, "--interval-s", "0.5", "--duration-s", "0.6", video=clip)
+    run, result = run_baseline(config, client=Exploding())
+    requests = read_jsonl(result.run_dir / "requests.jsonl")
+    assert requests and all(r["status"] == "client_exception" and r["error_type"] == "RuntimeError" for r in requests)
+    assert result.exit_code == 0
 
 
 def test_observation_state_keeps_confirmed_text_through_failures():
@@ -148,14 +175,14 @@ def test_observation_state_keeps_confirmed_text_through_failures():
 # --------------------------------------------------------------------------- shutdown
 
 
-def test_interrupt_shuts_down_cleanly_with_request_in_flight(tmp_path, clip):
-    client = FakeVLMClient(latency_s=10.0)
+def test_interrupt_shuts_down_cleanly_with_request_in_flight(tmp_path, llama, clip):
+    llama.delay_s = 10.0
     telemetry = FakeTelemetry()
-    config = config_for(tmp_path, "--interval-s", "0.2", "--shutdown-timeout-s", "2", video=clip)
+    config = config_for(tmp_path, llama, "--interval-s", "0.2", "--shutdown-timeout-s", "2", video=clip)
     timer = threading.Timer(0.5, _thread.interrupt_main)
     started = time.monotonic()
     timer.start()
-    run, result = run_baseline(config, client=client, telemetry=telemetry)
+    run, result = run_baseline(config, telemetry=telemetry)
     elapsed = time.monotonic() - started
     timer.join()
 
@@ -165,7 +192,7 @@ def test_interrupt_shuts_down_cleanly_with_request_in_flight(tmp_path, clip):
     assert manifest["source"]["end"]["reason"] == EndReason.INTERRUPTED.value
     assert manifest["threads_not_joined"] == [] and baseline_threads_alive() == []
     assert not run.source.is_open
-    assert client.closed and telemetry.closed
+    assert run.client_closed and telemetry.closed
     assert elapsed < 2.0  # the 10 s request was abandoned, not waited out
     requests = read_jsonl(result.run_dir / "requests.jsonl")
     assert len(requests) == 1 and requests[0]["status"] in ("connection_error", "abandoned_at_shutdown")
@@ -176,9 +203,9 @@ def test_interrupt_shuts_down_cleanly_with_request_in_flight(tmp_path, clip):
         assert again.read().frame_id == 0
 
 
-def test_duration_limit_stops_a_run_and_exits_zero(tmp_path):
+def test_duration_limit_stops_a_run_and_exits_zero(tmp_path, llama):
     long_clip = write_test_video(tmp_path / "long.avi", frames=100, fps=20.0)  # 5 s
-    config = config_for(tmp_path, "--interval-s", "0.2", "--duration-s", "0.6", "--fake-vlm-latency-s", "0.01", video=long_clip)
+    config = config_for(tmp_path, llama, "--interval-s", "0.2", "--duration-s", "0.6", video=long_clip)
     run, result = run_baseline(config)
     assert result.exit_code == 0
     assert result.manifest["run_end_reason"] == "duration_limit"
@@ -186,11 +213,11 @@ def test_duration_limit_stops_a_run_and_exits_zero(tmp_path):
     assert baseline_threads_alive() == []
 
 
-def test_webcam_source_runs_through_the_same_entry_point(tmp_path):
+def test_webcam_source_runs_through_the_same_entry_point(tmp_path, llama):
     capture = FakeVideoCapture([solid_frame(i) for i in range(200)], read_delay_s=0.02)
     factory = CaptureFactory(lambda: capture)
     config = parse_args(["--source", "webcam", "--interval-s", "0.2", "--duration-s", "0.7",
-                         "--fake-vlm-latency-s", "0.01", "--no-display", "--run-dir", str(tmp_path / "cam")])
+                         "--no-display", "--run-dir", str(tmp_path / "cam"), "--vlm-url", llama.url])
     run, result = run_baseline(
         config, source_factory=lambda on_drop: WebcamSource(0, capture_factory=factory, on_drop=on_drop)
     )
@@ -202,11 +229,11 @@ def test_webcam_source_runs_through_the_same_entry_point(tmp_path):
     assert capture.released
 
 
-def test_source_errors_are_not_reported_as_success(tmp_path):
+def test_source_errors_are_not_reported_as_success(tmp_path, llama):
     placeholder = tmp_path / "fake.avi"
     placeholder.write_bytes(b"")
     truncated = FakeVideoCapture([solid_frame(i) for i in range(6)] + [FAIL], frame_count=100, fps=20.0)
-    config = config_for(tmp_path, "--interval-s", "0.1", "--fake-vlm-latency-s", "0.01", video=placeholder)
+    config = config_for(tmp_path, llama, "--interval-s", "0.1", video=placeholder)
     run, result = run_baseline(
         config,
         source_factory=lambda on_drop: ReplaySource(placeholder, capture_factory=lambda *_: truncated, on_drop=on_drop),
@@ -216,8 +243,8 @@ def test_source_errors_are_not_reported_as_success(tmp_path):
     assert result.manifest["source"]["end"]["complete"] is False
 
 
-def test_source_open_failure_still_writes_a_manifest(tmp_path):
-    config = config_for(tmp_path, video=tmp_path / "missing.avi")
+def test_source_open_failure_still_writes_a_manifest(tmp_path, llama):
+    config = config_for(tmp_path, llama, video=tmp_path / "missing.avi")
     run, result = run_baseline(config)
     assert result.exit_code == 2
     manifest = json.loads((result.run_dir / "manifest.json").read_text())
@@ -225,12 +252,12 @@ def test_source_open_failure_still_writes_a_manifest(tmp_path):
     assert "not found" in manifest["error_detail"]
 
 
-def test_source_drops_reach_the_drop_log(tmp_path):
+def test_source_drops_reach_the_drop_log(tmp_path, llama):
     placeholder = tmp_path / "fake.avi"
     placeholder.write_bytes(b"")
     entries = [solid_frame(0), solid_frame(1), None, solid_frame(3), solid_frame(4)]
     capture = FakeVideoCapture(entries, fps=10.0)
-    config = config_for(tmp_path, "--interval-s", "0.1", "--fake-vlm-latency-s", "0.01", video=placeholder)
+    config = config_for(tmp_path, llama, "--interval-s", "0.1", video=placeholder)
     run, result = run_baseline(
         config, source_factory=lambda on_drop: ReplaySource(placeholder, capture_factory=lambda *_: capture, on_drop=on_drop)
     )
@@ -242,21 +269,21 @@ def test_source_drops_reach_the_drop_log(tmp_path):
 # --------------------------------------------------------------------------- telemetry
 
 
-def test_telemetry_is_written_and_unavailable_sensors_are_never_zero(tmp_path, clip):
-    config = config_for(tmp_path, "--interval-s", "0.5", "--duration-s", "0.5", "--telemetry-interval-s", "0.1",
-                        "--fake-vlm-latency-s", "0.01", video=clip, name="ok")
+def test_telemetry_is_written_and_unavailable_sensors_are_never_zero(tmp_path, llama, clip):
+    config = config_for(tmp_path, llama, "--interval-s", "0.5", "--duration-s", "0.5", "--telemetry-interval-s", "0.1",
+                        video=clip, name="ok")
     _, result = run_baseline(config)
     samples = read_jsonl(result.run_dir / "telemetry.jsonl")
     assert len(samples) >= 4 and all(s["valid"] and s["unit"] == "W" for s in samples)
     assert result.manifest["telemetry"]["metadata"]["synthetic"] is True
 
-    config = config_for(tmp_path, "--interval-s", "0.5", "--duration-s", "0.3", "--telemetry-interval-s", "0.1",
-                        "--fake-vlm-latency-s", "0.01", video=clip, name="unavailable")
+    config = config_for(tmp_path, llama, "--interval-s", "0.5", "--duration-s", "0.3", "--telemetry-interval-s", "0.1",
+                        video=clip, name="unavailable")
     _, result = run_baseline(config, telemetry=FakeTelemetry(available=False))
     samples = read_jsonl(result.run_dir / "telemetry.jsonl")
     assert samples and all(s["valid"] is False and s["value"] is None and s["error"] for s in samples)
 
-    config = config_for(tmp_path, "--telemetry", "off", "--duration-s", "0.2", "--fake-vlm-latency-s", "0.01",
+    config = config_for(tmp_path, llama, "--telemetry", "off", "--duration-s", "0.2",
                         video=clip, name="off")
     _, result = run_baseline(config)
     assert (result.run_dir / "telemetry.jsonl").read_text() == ""
@@ -273,7 +300,7 @@ def test_telemetry_is_written_and_unavailable_sensors_are_never_zero(tmp_path, c
         ["--source", "webcam", "--video", "x.avi"],
         ["--source", "replay", "--video", "x.avi", "--interval-s", "0"],
         ["--source", "replay", "--video", "x.avi", "--interval-s", "-1"],
-        ["--source", "replay", "--video", "x.avi", "--fake-vlm-outcomes", "ok,bogus"],
+        ["--source", "replay", "--video", "x.avi", "--vlm", "fake"],
         ["--source", "camera"],
     ],
 )
@@ -283,49 +310,46 @@ def test_invalid_cli_arguments_exit_2(argv, capsys):
     assert exc.value.code == 2
 
 
-def test_pending_real_telemetry_fails_clearly_without_creating_a_run(tmp_path, clip, capsys):
+def test_pending_real_telemetry_fails_clearly_without_creating_a_run(tmp_path, llama, clip, capsys):
     run_dir = tmp_path / "never"
-    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir), "--telemetry", "real"])
+    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir),
+                 "--vlm-url", llama.url, "--telemetry", "real"])
     assert code == 2
     assert "pending #2" in capsys.readouterr().err
     assert not run_dir.exists()
 
 
-def test_real_vlm_without_a_server_fails_before_the_run(tmp_path, clip, capsys):
+def test_missing_llama_server_fails_before_the_run(tmp_path, clip, capsys):
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         url = f"http://127.0.0.1:{s.getsockname()[1]}"
     run_dir = tmp_path / "never"
     code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir),
-                 "--vlm", "real", "--vlm-url", url])
+                 "--vlm-url", url])
     assert code == 2
     assert "no ready llama-server" in capsys.readouterr().err
     assert not run_dir.exists()
 
 
-def test_real_vlm_runs_end_to_end_against_a_llama_server(tmp_path, clip):
-    server = FakeServer()
-    server.respond = lambda path, body: reply(text="A moving red box.") if path != "/health" else (200, b'{"status":"ok"}')
-    try:
-        config = config_for(tmp_path, "--vlm", "real", "--vlm-url", server.url, "--interval-s", "0.5",
-                            "--duration-s", "1.2", video=clip)
-        run, result = run_baseline(config)
-    finally:
-        server.stop()
+def test_requests_reach_llama_server_and_log_its_reply(tmp_path, llama, clip):
+    llama.respond = lambda path, body: reply(text="A moving red box.")
+    config = config_for(tmp_path, llama, "--interval-s", "0.5", "--duration-s", "1.2", video=clip)
+    run, result = run_baseline(config)
     assert result.exit_code == 0
     requests = read_jsonl(result.run_dir / "requests.jsonl")
     assert len(requests) == 3
     assert all(r["status"] == "ok" and r["text"] == "A moving red box." and r["finish_reason"] == "stop" for r in requests)
     assert requests[0]["usage"]["prompt_tokens"] == 150
-    assert result.manifest["vlm"]["metadata"]["kind"] == "llama-server"
-    posted = [json.loads(body) for method, path, body in server.requests if path == "/v1/chat/completions"]
+    assert result.manifest["vlm"]["kind"] == "llama-server"
+    posted = [json.loads(body) for method, path, body in llama.requests]
     assert [p["max_tokens"] for p in posted] == [64] * 3
 
 
-def test_refuses_to_overwrite_a_non_empty_run_dir(tmp_path, clip, capsys):
+def test_refuses_to_overwrite_a_non_empty_run_dir(tmp_path, llama, clip, capsys):
     run_dir = tmp_path / "used"
     run_dir.mkdir()
     (run_dir / "manifest.json").write_text("{}")
-    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir)])
+    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir),
+                 "--vlm-url", llama.url])
     assert code == 2
     assert (run_dir / "manifest.json").read_text() == "{}"
