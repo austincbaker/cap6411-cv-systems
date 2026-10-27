@@ -21,6 +21,14 @@ AppleSmartBattery) updates about once a minute, so it is polled every
   by Apple; it matched voltage x current when both were read together.
 - ``system_load_accumulator``: ``AccumulatedSystemLoad``, a running counter
   whose unit is undocumented (consistent with mJ); kept raw, ``value: None``.
+
+powermetrics (needs root): ``sudo -n powermetrics`` runs as a child process
+for the whole run and streams one sample per ``interval_ms``. Each sample
+gives the energy used in that interval by the CPU, GPU and Neural Engine
+(``cpu_energy``, ``gpu_energy``, ``ane_energy``, mJ), reported as
+``quantity: "energy"`` in J with the measured ``interval_s``. ``sudo -n``
+never prompts: without cached credentials or a sudoers rule the sensor
+reports ``sudo_password_required`` and the run continues without it.
 """
 
 from __future__ import annotations
@@ -28,6 +36,7 @@ from __future__ import annotations
 import plistlib
 import subprocess
 import sys
+import threading
 import time
 from typing import Callable, Optional
 
@@ -127,10 +136,110 @@ class BatterySensor:
         return [reading("battery", self.DOMAIN_BATTERY, "power", host_time_s=now, error=error)]
 
 
+class PowermetricsSensor:
+    DOMAINS = ("cpu", "gpu", "ane")
+
+    def __init__(self, *, interval_ms: int = 500, popen: Callable[..., subprocess.Popen] = subprocess.Popen,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.interval_ms = interval_ms
+        self.command = ["sudo", "-n", "/usr/bin/powermetrics", "--samplers", "cpu_power,gpu_power,ane_power",
+                        "-i", str(interval_ms), "-f", "plist"]
+        self._popen = popen
+        self._clock = clock
+        self._proc: Optional[subprocess.Popen] = None
+        self._reader: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
+        self._pending: list[dict] = []
+        self._started = False
+        self._ended_reported = False
+
+    def metadata(self) -> dict:
+        return {
+            "source": " ".join(self.command),
+            "interval_ms": self.interval_ms,
+            "sensors": [{"sensor_id": f"{d}_energy", "domain": d, "quantity": "energy", "unit": "J",
+                         "derived_from": f"powermetrics processor.{d}_energy (mJ per interval)"} for d in self.DOMAINS],
+            "host_time_s": "when the sample arrived, i.e. the end of its interval",
+        }
+
+    def poll(self) -> list[dict]:
+        if not self._started:
+            self._started = True
+            self._start()
+        with self._lock:
+            out, self._pending = self._pending, []
+        if self._proc is not None and self._proc.poll() is not None and not self._reader.is_alive() \
+                and not self._ended_reported:
+            self._ended_reported = True
+            err = (self._proc.stderr.read() or b"").decode("utf-8", "replace").strip() if self._proc.stderr else ""
+            reason = "sudo_password_required" if "password" in err else f"powermetrics_exited: {self._proc.returncode} {err[:200]}"
+            out.append(reading("powermetrics", "cpu", "energy", host_time_s=self._clock(), error=reason))
+        return out
+
+    def close(self) -> None:
+        proc = self._proc
+        if proc is not None and proc.poll() is None:
+            proc.terminate()  # sudo relays the signal to powermetrics
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+        if self._reader is not None:
+            self._reader.join(timeout=3)
+
+    def _start(self) -> None:
+        try:
+            self._proc = self._popen(self.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except OSError as exc:
+            self._ended_reported = True
+            with self._lock:
+                self._pending.append(reading("powermetrics", "cpu", "energy", host_time_s=self._clock(),
+                                             error=f"powermetrics_not_started: {exc}"))
+            return
+        self._reader = threading.Thread(target=self._read_stream, name="powermetrics-reader", daemon=True)
+        self._reader.start()
+
+    def _read_stream(self) -> None:
+        buffer = b""
+        while True:
+            chunk = self._proc.stdout.read1(65536) if hasattr(self._proc.stdout, "read1") else self._proc.stdout.read(65536)
+            if not chunk:
+                break
+            buffer += chunk
+            *docs, buffer = buffer.split(b"\0")
+            for doc in docs:
+                if doc.strip():
+                    self._handle(doc)
+        if buffer.strip():
+            self._handle(buffer)
+
+    def _handle(self, doc: bytes) -> None:
+        now = self._clock()
+        try:
+            sample = plistlib.loads(doc.strip())
+            interval_s = sample["elapsed_ns"] / 1e9
+            processor = sample["processor"]
+            device_time = sample.get("timestamp")
+            device_time_s = device_time.timestamp() if hasattr(device_time, "timestamp") else None
+            readings = []
+            for d in self.DOMAINS:
+                mj = processor[f"{d}_energy"]
+                r = reading(f"{d}_energy", d, "energy", raw_value=mj, raw_unit="mJ", value=mj / 1000.0, unit="J",
+                            host_time_s=now, device_time_s=device_time_s)
+                r["interval_s"] = interval_s
+                readings.append(r)
+        except (plistlib.InvalidFileException, ValueError, KeyError, TypeError) as exc:
+            readings = [reading("powermetrics", "cpu", "energy", host_time_s=now,
+                                error=f"unexpected_powermetrics_output: {type(exc).__name__}: {exc}")]
+        with self._lock:
+            self._pending.extend(readings)
+
+
 class EnergyMonitor:
     def __init__(self, sensors: Optional[list] = None) -> None:
         if sensors is None:
-            sensors = [BatterySensor()] if sys.platform == "darwin" else []
+            sensors = [BatterySensor(), PowermetricsSensor()] if sys.platform == "darwin" else []
         self.sensors = sensors
         self._reported_none = False
 
