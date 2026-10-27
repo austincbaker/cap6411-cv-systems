@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Callable, Sequence
 
-from app.main import InferenceResult
+from src.vlm.client import InferenceResult
 
 
 class FakeVLMClient:

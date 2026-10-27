@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import _thread
 import json
+import socket
 import threading
 import time
 
@@ -17,6 +18,7 @@ from app.main import BaselineRun, main, parse_args
 from app.state import ObservationState, render_overlay
 from src.capture import EndReason, ReplaySource, WebcamSource
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
+from tests.fakes.fake_llama_server import FakeServer, reply
 from tests.fakes.fake_telemetry import FakeTelemetry
 from tests.fakes.fake_vlm import FakeVLMClient
 from tests.fakes.video import write_test_video
@@ -281,13 +283,43 @@ def test_invalid_cli_arguments_exit_2(argv, capsys):
     assert exc.value.code == 2
 
 
-@pytest.mark.parametrize("flag", [["--vlm", "real"], ["--telemetry", "real"]])
-def test_pending_real_backends_fail_clearly_without_creating_a_run(tmp_path, clip, flag, capsys):
+def test_pending_real_telemetry_fails_clearly_without_creating_a_run(tmp_path, clip, capsys):
     run_dir = tmp_path / "never"
-    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir), *flag])
+    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir), "--telemetry", "real"])
     assert code == 2
-    assert "pending #" in capsys.readouterr().err
+    assert "pending #2" in capsys.readouterr().err
     assert not run_dir.exists()
+
+
+def test_real_vlm_without_a_server_fails_before_the_run(tmp_path, clip, capsys):
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        url = f"http://127.0.0.1:{s.getsockname()[1]}"
+    run_dir = tmp_path / "never"
+    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir),
+                 "--vlm", "real", "--vlm-url", url])
+    assert code == 2
+    assert "no ready llama-server" in capsys.readouterr().err
+    assert not run_dir.exists()
+
+
+def test_real_vlm_runs_end_to_end_against_a_llama_server(tmp_path, clip):
+    server = FakeServer()
+    server.respond = lambda path, body: reply(text="A moving red box.") if path != "/health" else (200, b'{"status":"ok"}')
+    try:
+        config = config_for(tmp_path, "--vlm", "real", "--vlm-url", server.url, "--interval-s", "0.5",
+                            "--duration-s", "1.2", video=clip)
+        run, result = run_baseline(config)
+    finally:
+        server.stop()
+    assert result.exit_code == 0
+    requests = read_jsonl(result.run_dir / "requests.jsonl")
+    assert len(requests) == 3
+    assert all(r["status"] == "ok" and r["text"] == "A moving red box." and r["finish_reason"] == "stop" for r in requests)
+    assert requests[0]["usage"]["prompt_tokens"] == 150
+    assert result.manifest["vlm"]["metadata"]["kind"] == "llama-server"
+    posted = [json.loads(body) for method, path, body in server.requests if path == "/v1/chat/completions"]
+    assert [p["max_tokens"] for p in posted] == [64] * 3
 
 
 def test_refuses_to_overwrite_a_non_empty_run_dir(tmp_path, clip, capsys):

@@ -26,9 +26,9 @@ Exit codes: 0 completed (EOF, --duration-s, or 'q' in the window), 2 bad
 config / source failed to open / source ended in error, 130 interrupted,
 1 unexpected application error.
 
-The VLM client (#1) and telemetry monitor (#2) are not implemented yet; the
-``InferenceClient`` and ``TelemetryMonitor`` protocols below define what this
-app expects, and ``--vlm fake`` / ``--telemetry fake`` use test doubles from
+``--vlm real`` talks to a running llama-server (``src/vlm/client.py``, #1;
+start the server first, see README). The telemetry monitor (#2) is not
+implemented yet. ``--vlm fake`` / ``--telemetry fake`` use test doubles from
 ``tests/fakes`` (run from the repository root).
 """
 
@@ -53,6 +53,7 @@ import numpy as np
 
 from app.state import ObservationState, render_overlay
 from src.capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
+from src.vlm.client import InferenceResult, LlamaServerClient
 
 SCHEMA_VERSION = "0-provisional"
 WINDOW_NAME = "cap6411 baseline"
@@ -60,27 +61,15 @@ FAKE_OUTCOMES = ("ok", "timeout", "connection_error", "http_error", "malformed",
 
 
 # ============================================================================ interfaces
-# Austin's real implementations (#1 src/vlm/client.py, #2 src/energy/monitor.py)
-# only need to match these shapes; nothing has to inherit from them.
-
-
-@dataclass
-class InferenceResult:
-    """What ``InferenceClient.describe`` returns.
-
-    status: "ok" | "timeout" | "connection_error" | "http_error" | "malformed" | "empty".
-    The app adds "client_exception" (describe raised) and "abandoned_at_shutdown".
-    usage stays None when the server reports no token/timing statistics.
-    """
-
-    status: str
-    text: Optional[str] = None
-    error_type: Optional[str] = None
-    error_detail: Optional[str] = None
-    usage: Optional[dict] = None
+# Implementations (src/vlm/client.py; #2 src/energy/monitor.py, pending) only
+# need to match these shapes; nothing has to inherit from them.
 
 
 class InferenceClient(Protocol):
+    """Returns an ``InferenceResult`` whose status is "ok" | "timeout" | "connection_error" |
+    "http_error" | "malformed" | "empty". The app adds "client_exception" (describe raised)
+    and "abandoned_at_shutdown"."""
+
     def describe(
         self, *, image_jpeg: bytes, prompt: str, max_tokens: int, frame_id: int, request_id: str
     ) -> InferenceResult: ...
@@ -152,7 +141,8 @@ def build_parser() -> argparse.ArgumentParser:
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
 
     back = parser.add_argument_group("backends")
-    back.add_argument("--vlm", choices=("fake", "real"), default="fake", help="'real' requires #1 (src/vlm/client.py)")
+    back.add_argument("--vlm", choices=("fake", "real"), default="fake", help="'real' uses a running llama-server at --vlm-url")
+    back.add_argument("--vlm-url", default="http://127.0.0.1:8080", help="llama-server address for --vlm real (default http://127.0.0.1:8080)")
     back.add_argument("--telemetry", choices=("fake", "real", "off"), default="fake", help="'real' requires #2 (src/energy/monitor.py)")
     back.add_argument("--telemetry-interval-s", type=positive_float, default=0.5)
     back.add_argument("--fake-vlm-latency-s", type=nonnegative_float, default=0.5, help="fake client latency per request")
@@ -197,7 +187,10 @@ def build_source(config: argparse.Namespace, on_drop) -> SourceBase:
 
 def build_client(config: argparse.Namespace) -> InferenceClient:
     if config.vlm == "real":
-        raise ConfigError("--vlm real is pending #1 (src/vlm/client.py has not landed); use --vlm fake")
+        client = LlamaServerClient(config.vlm_url, timeout_s=config.request_timeout_s)
+        if not client.health():
+            raise ConfigError(f"--vlm real: no ready llama-server at {config.vlm_url} (start it first; see README)")
+        return client
     try:
         from tests.fakes.fake_vlm import FakeVLMClient
     except ImportError as exc:
@@ -429,8 +422,9 @@ class BaselineRun:
             error_type = getattr(result, "error_type", None)
             error_detail = getattr(result, "error_detail", None)
             usage = getattr(result, "usage", None)
+            finish_reason = getattr(result, "finish_reason", None)
         except Exception as exc:
-            status, text, usage = "client_exception", None, None
+            status, text, usage, finish_reason = "client_exception", None, None, None
             error_type, error_detail = type(exc).__name__, str(exc)
         host_response_available_s = time.monotonic()
         if status == "ok" and not (isinstance(text, str) and text.strip()):
@@ -446,6 +440,7 @@ class BaselineRun:
             error_type=None if status == "ok" else (error_type or status),
             error_detail=None if status == "ok" else error_detail,
             usage=usage,
+            finish_reason=finish_reason,
         )
         return record
 
