@@ -27,9 +27,8 @@ config / source failed to open / source ended in error, 130 interrupted,
 1 unexpected application error.
 
 The VLM is a running llama-server at ``--vlm-url`` (``src/vlm/client.py``,
-#1; start it first, see README). The telemetry monitor (#2) is not
-implemented yet; ``--telemetry fake`` uses a test double from ``tests/fakes``
-(run from the repository root).
+#1; start it first, see README). Power telemetry (``src/energy/monitor.py``,
+#2) reads the MacBook battery controller and, with sudo, powermetrics.
 """
 
 from __future__ import annotations
@@ -53,6 +52,7 @@ import numpy as np
 
 from app.state import ObservationState, render_overlay
 from src.capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
+from src.energy.monitor import EnergyMonitor
 from src.vlm.client import InferenceResult, LlamaServerClient
 
 SCHEMA_VERSION = "0-provisional"
@@ -142,8 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     back = parser.add_argument_group("backends")
     back.add_argument("--vlm-url", default="http://127.0.0.1:8080", help="running llama-server address (default http://127.0.0.1:8080)")
-    back.add_argument("--telemetry", choices=("fake", "real", "off"), default="fake", help="'real' requires #2 (src/energy/monitor.py)")
-    back.add_argument("--telemetry-interval-s", type=positive_float, default=0.5)
+    back.add_argument("--telemetry", choices=("on", "off"), default="on", help="power telemetry (default on)")
+    back.add_argument("--telemetry-interval-s", type=positive_float, default=0.5,
+                      help="telemetry poll and powermetrics sample interval (default 0.5)")
 
     out = parser.add_argument_group("output")
     out.add_argument("--run-dir", help="output directory (default runs/<UTC time>_<source>/); must not already contain files")
@@ -183,13 +184,7 @@ def build_client(config: argparse.Namespace) -> InferenceClient:
 def build_telemetry(config: argparse.Namespace) -> Optional[TelemetryMonitor]:
     if config.telemetry == "off":
         return None
-    if config.telemetry == "real":
-        raise ConfigError("--telemetry real is pending #2 (src/energy/monitor.py has not landed); use fake or off")
-    try:
-        from tests.fakes.fake_telemetry import FakeTelemetry
-    except ImportError as exc:
-        raise ConfigError(f"--telemetry fake needs tests/fakes on the import path; run from the repo root ({exc})")
-    return FakeTelemetry()
+    return EnergyMonitor(powermetrics_interval_ms=max(1, round(config.telemetry_interval_s * 1000)))
 
 
 # ============================================================================ plumbing
@@ -637,7 +632,7 @@ class BaselineRun:
             "vlm": _safe_metadata(self.client),
             "telemetry": (
                 {"kind": "off"} if self.telemetry is None
-                else {"kind": self.config.telemetry, "interval_s": self.config.telemetry_interval_s, "metadata": _safe_metadata(self.telemetry)}
+                else {"kind": "on", "interval_s": self.config.telemetry_interval_s, "metadata": _safe_metadata(self.telemetry)}
             ),
             "counts": {
                 **self.state.counts,

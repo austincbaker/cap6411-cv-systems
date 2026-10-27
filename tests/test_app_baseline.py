@@ -38,7 +38,7 @@ def llama():
 
 def config_for(tmp_path, llama, *extra, video=None, name="run"):
     argv = ["--source", "replay", "--video", str(video), "--no-display", "--run-dir", str(tmp_path / name),
-            "--vlm-url", llama.url, *extra]
+            "--vlm-url", llama.url, "--telemetry", "off", *extra]  # tests inject FakeTelemetry when they need it
     return parse_args(argv)
 
 
@@ -217,7 +217,8 @@ def test_webcam_source_runs_through_the_same_entry_point(tmp_path, llama):
     capture = FakeVideoCapture([solid_frame(i) for i in range(200)], read_delay_s=0.02)
     factory = CaptureFactory(lambda: capture)
     config = parse_args(["--source", "webcam", "--interval-s", "0.2", "--duration-s", "0.7",
-                         "--no-display", "--run-dir", str(tmp_path / "cam"), "--vlm-url", llama.url])
+                         "--no-display", "--run-dir", str(tmp_path / "cam"), "--vlm-url", llama.url,
+                         "--telemetry", "off"])
     run, result = run_baseline(
         config, source_factory=lambda on_drop: WebcamSource(0, capture_factory=factory, on_drop=on_drop)
     )
@@ -272,7 +273,7 @@ def test_source_drops_reach_the_drop_log(tmp_path, llama):
 def test_telemetry_is_written_and_unavailable_sensors_are_never_zero(tmp_path, llama, clip):
     config = config_for(tmp_path, llama, "--interval-s", "0.5", "--duration-s", "0.5", "--telemetry-interval-s", "0.1",
                         video=clip, name="ok")
-    _, result = run_baseline(config)
+    _, result = run_baseline(config, telemetry=FakeTelemetry())
     samples = read_jsonl(result.run_dir / "telemetry.jsonl")
     assert len(samples) >= 4 and all(s["valid"] and s["unit"] == "W" for s in samples)
     assert result.manifest["telemetry"]["metadata"]["synthetic"] is True
@@ -301,6 +302,7 @@ def test_telemetry_is_written_and_unavailable_sensors_are_never_zero(tmp_path, l
         ["--source", "replay", "--video", "x.avi", "--interval-s", "0"],
         ["--source", "replay", "--video", "x.avi", "--interval-s", "-1"],
         ["--source", "replay", "--video", "x.avi", "--vlm", "fake"],
+        ["--source", "replay", "--video", "x.avi", "--telemetry", "fake"],
         ["--source", "camera"],
     ],
 )
@@ -308,15 +310,6 @@ def test_invalid_cli_arguments_exit_2(argv, capsys):
     with pytest.raises(SystemExit) as exc:
         parse_args(argv)
     assert exc.value.code == 2
-
-
-def test_pending_real_telemetry_fails_clearly_without_creating_a_run(tmp_path, llama, clip, capsys):
-    run_dir = tmp_path / "never"
-    code = main(["--source", "replay", "--video", str(clip), "--no-display", "--run-dir", str(run_dir),
-                 "--vlm-url", llama.url, "--telemetry", "real"])
-    assert code == 2
-    assert "pending #2" in capsys.readouterr().err
-    assert not run_dir.exists()
 
 
 def test_missing_llama_server_fails_before_the_run(tmp_path, clip, capsys):

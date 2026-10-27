@@ -237,9 +237,10 @@ class PowermetricsSensor:
 
 
 class EnergyMonitor:
-    def __init__(self, sensors: Optional[list] = None) -> None:
+    def __init__(self, sensors: Optional[list] = None, *, powermetrics_interval_ms: int = 500) -> None:
         if sensors is None:
-            sensors = [BatterySensor(), PowermetricsSensor()] if sys.platform == "darwin" else []
+            sensors = ([BatterySensor(), PowermetricsSensor(interval_ms=powermetrics_interval_ms)]
+                       if sys.platform == "darwin" else [])
         self.sensors = sensors
         self._reported_none = False
 
