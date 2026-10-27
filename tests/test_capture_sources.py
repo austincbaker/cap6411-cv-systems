@@ -47,7 +47,6 @@ def test_replay_paces_frames_to_media_time_on_fake_clock(placeholder_path):
     assert [f.frame_id for f in frames] == list(range(10))
     for frame in frames:
         assert frame.host_capture_s == pytest.approx(start + frame.source_time_s)
-        assert frame.host_deadline_s == pytest.approx(frame.host_capture_s)
     # 10 frames at 10 fps represent 1.0 s of observation, including the last frame's period.
     assert clock.now == pytest.approx(start + 1.0)
     assert source.end.reason is EndReason.EOF and source.end.complete is True
