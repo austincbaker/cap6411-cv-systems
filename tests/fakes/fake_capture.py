@@ -9,6 +9,7 @@ After the last entry, grab/read return False (end of stream).
 
 from __future__ import annotations
 
+import time
 from typing import Any, Optional, Sequence
 
 import cv2
@@ -35,6 +36,7 @@ class FakeVideoCapture:
         height: Optional[int] = None,
         accept_settings: bool = False,
         close_after: Optional[int] = None,
+        read_delay_s: float = 0.0,
     ) -> None:
         self.frames = list(frames)
         self.fps = fps
@@ -49,6 +51,7 @@ class FakeVideoCapture:
         self.height = height
         self.accept_settings = accept_settings
         self.close_after = close_after
+        self.read_delay_s = read_delay_s  # real sleep per read(), to mimic a camera's frame interval
         self.released = False
         self.set_calls: list[tuple[int, float]] = []
         self.grabs = 0
@@ -104,6 +107,8 @@ class FakeVideoCapture:
         return True, image.copy()
 
     def read(self):
+        if self.read_delay_s:
+            time.sleep(self.read_delay_s)
         if not self.grab():
             return False, None
         return self.retrieve()
