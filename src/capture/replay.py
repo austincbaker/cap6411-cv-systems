@@ -209,8 +209,7 @@ class ReplaySource(SourceBase):
             pos_ms = _finite_or_none(self._capture.get(cv2.CAP_PROP_POS_MSEC))
             if pos_ms is not None:
                 return pos_ms / 1000.0
-            # A missing timestamp mid-stream: keep the timeline moving, but count it.
-            self.info.nonmonotonic_timestamps += 1
+            # A missing timestamp mid-stream repeats the previous one; _deadline counts it as non-monotonic.
             return self._prev_t_s if self._prev_t_s is not None else 0.0
         return frame_index / self._fps
 
