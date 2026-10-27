@@ -27,9 +27,8 @@ python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
 
 The app needs a running llama-server at `--vlm-url` (see "Local VLM
 server" below) and exits with an error before creating a run directory if
-none is ready. Telemetry defaults to `--telemetry fake` (a test double in
-`tests/fakes/`, synthetic values); `--telemetry real` exits with a
-"pending #2" error until #2 lands. Run `python -m app.main -h`
+none is ready. Power telemetry is on by default (see "Power telemetry"
+below); `--telemetry off` disables it. Run `python -m app.main -h`
 for the full flag list. The flags are a stable interface for the benchmark
 runner (#18); change them only with a note to its owner.
 
@@ -44,7 +43,7 @@ runner (#18); change them only with a note to its owner.
 | `--prompt`, `--max-tokens`, `--request-timeout-s` | | request settings |
 | `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
 | `--vlm-url` | `http://127.0.0.1:8080` | llama-server address |
-| `--telemetry fake\|real\|off`, `--telemetry-interval-s` | `fake`, `0.5` | telemetry backend |
+| `--telemetry on\|off`, `--telemetry-interval-s` | `on`, `0.5` | power telemetry and its sample interval |
 | `--run-dir PATH` | `runs/<UTC>_<source>/` | output directory (refuses to overwrite) |
 | `--no-display` | | headless run |
 | `--shutdown-timeout-s` | `5` | max wait for threads / in-flight request on Ctrl-C |
@@ -192,3 +191,37 @@ answers, and checks that a server that isn't running shows up as
   that, so the first request after a timeout can take up to ~1 s longer.
 - **Output bound:** `max_tokens` caps every answer; a cut-off answer is logged with
   `finish_reason: "length"`.
+
+
+## Power telemetry
+
+Issue #2, on the MacBook (Apple Silicon, macOS). The plan assumed Linux
+powercap counters on Ubuntu; the team has no Ubuntu machine, so this reads
+macOS sources instead. Each reading in `telemetry.jsonl` has `sensor_id`,
+`domain`, `quantity`, `raw_value`/`raw_unit`, `value`/`unit`, `host_time_s`
+(monotonic, same clock as the request logs), `device_time_s`, `valid` and
+`error`. Unavailable or implausible readings are `valid: false, value: null`,
+never 0.
+
+| Sensor | Domain | What | Cadence | Needs |
+|---|---|---|---|---|
+| `cpu_energy`, `gpu_energy`, `ane_energy` | cpu / gpu / ane | energy used in each interval (J), from `powermetrics` | every `--telemetry-interval-s` (0.5 s) | `sudo` |
+| `battery_power` | battery_discharge | voltage x current (W) | ~60 s (battery controller) | running on battery |
+| `system_load` | system_load | Apple's `SystemLoad` (W, undocumented) | ~60 s | running on battery |
+| `system_load_accumulator` | system_load | Apple's raw running counter, unit undocumented | ~60 s | running on battery |
+
+`powermetrics` runs as `sudo -n`, which never prompts. Cache your password
+right before a run:
+
+```bash
+sudo -v && python -m app.main --source webcam --interval-s 2 --duration-s 90 --no-display
+```
+
+Without it, the run continues and logs one `sudo_password_required` reading.
+Battery readings on AC power are logged with `error: external_power_connected`.
+
+Measured on the M2 during a 90 s webcam run: 179 powermetrics samples, 0.506 s
+apart, none missed. (Its CPU 14.6 W / GPU 2.5 W averages include heavy background
+Spotlight indexing, so they are not a baseline.) The battery controller once reported
+`SystemLoad` = -31.7 W, so negative power values are marked
+`implausible_negative_value`.

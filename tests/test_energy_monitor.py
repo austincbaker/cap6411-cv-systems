@@ -68,6 +68,14 @@ def test_polls_are_rate_limited_and_repeats_are_not_re_emitted():
     assert {r["device_time_s"] for r in sensor.poll()} == {1060}
 
 
+def test_negative_power_is_invalid_but_keeps_its_raw_value():
+    sensor = BatterySensor(run=FakeIoreg(ioreg_bytes(current=-3380, system_load=-31726)), clock=FakeClock())
+    r = by_id(sensor.poll())
+    assert r["system_load"]["valid"] is False and r["system_load"]["value"] is None
+    assert r["system_load"]["error"] == "implausible_negative_value" and r["system_load"]["raw_value"] == -31726
+    assert r["battery_power"]["valid"] and r["system_load_accumulator"]["valid"]
+
+
 def test_external_power_makes_readings_invalid_not_zero():
     sensor = BatterySensor(run=FakeIoreg(ioreg_bytes(on_ac=True, current=1500)), clock=FakeClock())
     readings = sensor.poll()

@@ -118,15 +118,22 @@ class BatterySensor:
         error = "external_power_connected" if on_ac else None
         if current_ma >= 2**63:  # some ioreg output formats print the signed value as unsigned 64-bit
             current_ma -= 2**64
-        common = dict(host_time_s=now, device_time_s=update_time, error=error)
+        battery_w = voltage_mv * -current_ma / 1e6
+        system_w = system_load_mw / 1000.0
+
+        def power_error(watts: float) -> Optional[str]:
+            # Power drawn on battery can't be negative; the controller has reported e.g. SystemLoad = -31.7 W.
+            return error or ("implausible_negative_value" if watts < 0 else None)
+
+        common = dict(host_time_s=now, device_time_s=update_time)
         return [
             reading("battery_power", self.DOMAIN_BATTERY, "power",
                     raw_value={"voltage_mV": voltage_mv, "current_mA": current_ma}, raw_unit="mV,mA",
-                    value=voltage_mv * -current_ma / 1e6, unit="W", **common),
+                    value=battery_w, unit="W", error=power_error(battery_w), **common),
             reading("system_load", self.DOMAIN_SYSTEM, "power", raw_value=system_load_mw, raw_unit="mW",
-                    value=system_load_mw / 1000.0, unit="W", **common),
+                    value=system_w, unit="W", error=power_error(system_w), **common),
             reading("system_load_accumulator", self.DOMAIN_SYSTEM, "energy_counter_raw",
-                    raw_value=accumulator, raw_unit="undocumented", value=None, unit=None, **common),
+                    raw_value=accumulator, raw_unit="undocumented", value=None, unit=None, error=error, **common),
         ]
 
     def _failure(self, now: float, error: str) -> list[dict]:
