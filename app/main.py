@@ -150,7 +150,6 @@ def build_parser() -> argparse.ArgumentParser:
     req.add_argument("--max-tokens", type=positive_int, default=64)
     req.add_argument("--request-timeout-s", type=positive_float, default=30.0)
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
-    req.add_argument("--max-image-side", type=int, default=0, help="downscale so the longer side is at most N px (0 = no resize)")
 
     back = parser.add_argument_group("backends")
     back.add_argument("--vlm", choices=("fake", "real"), default="fake", help="'real' requires #1 (src/vlm/client.py)")
@@ -177,8 +176,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--source replay requires --video PATH")
     if args.source == "webcam" and args.video:
         parser.error("--video is only valid with --source replay")
-    if args.max_image_side < 0:
-        parser.error("--max-image-side must be >= 0")
     outcomes = [o.strip() for o in args.fake_vlm_outcomes.split(",") if o.strip()]
     unknown = sorted(set(outcomes) - set(FAKE_OUTCOMES))
     if not outcomes or unknown:
@@ -270,16 +267,11 @@ class LatestFrameSlot:
             return self._frame
 
 
-def encode_jpeg(image: np.ndarray, quality: int, max_side: int) -> tuple[bytes, int, int]:
-    height, width = image.shape[:2]
-    if max_side and max(height, width) > max_side:
-        scale = max_side / float(max(height, width))
-        image = cv2.resize(image, (max(1, round(width * scale)), max(1, round(height * scale))), interpolation=cv2.INTER_AREA)
-        height, width = image.shape[:2]
+def encode_jpeg(image: np.ndarray, quality: int) -> bytes:
     ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
         raise ValueError("JPEG encoding failed")
-    return buffer.tobytes(), width, height
+    return buffer.tobytes()
 
 
 def default_run_dir(source: str) -> Path:
@@ -338,10 +330,11 @@ class BaselineRun:
         self.results: "queue.Queue[dict]" = queue.Queue()
         self.telemetry_stop = threading.Event()
         self.threads: list[threading.Thread] = []
+        self.capture_thread: Optional[threading.Thread] = None
         self.in_flight: Optional[dict] = None
-        self.display_enabled = not config.no_display
-        self.display_note: Optional[str] = None
-        self.display_used = False
+        self.client_closed = False
+        self.display = not config.no_display
+        self.display_error: Optional[str] = None
         self.run_end_reason: Optional[str] = None
         self.error_detail: Optional[str] = None
         self.manifest: dict = {}
@@ -381,16 +374,17 @@ class BaselineRun:
 
     # -- threads -----------------------------------------------------------
     def _start_threads(self) -> None:
-        self._spawn("capture", self._capture_loop)
+        self.capture_thread = self._spawn("capture", self._capture_loop)
         self._spawn("inference", self._inference_loop)
         if self.telemetry is not None:
             self._spawn("telemetry", self._telemetry_loop)
 
-    def _spawn(self, name: str, target: Callable[[], None]) -> None:
+    def _spawn(self, name: str, target: Callable[[], None]) -> threading.Thread:
         # daemon=True only as a last resort if a client ignores its timeout; shutdown always joins.
         thread = threading.Thread(target=target, name=f"baseline-{name}", daemon=True)
         self.threads.append(thread)
         thread.start()
+        return thread
 
     def _capture_loop(self) -> None:
         try:
@@ -409,7 +403,8 @@ class BaselineRun:
                 return
             self.results.put(self._execute(*job))
 
-    def _execute(self, frame: Frame, request_id: str, tick_index: int, host_tick_s: float) -> dict:
+    def _execute(self, frame: Frame, jpeg: bytes, encode_s: float, request_id: str, tick_index: int,
+                 host_tick_s: float) -> dict:
         record = {
             "schema_version": SCHEMA_VERSION,
             "request_id": request_id,
@@ -420,17 +415,6 @@ class BaselineRun:
             "host_capture_s": frame.host_capture_s,
             "host_tick_s": host_tick_s,
         }
-        encode_start = time.monotonic()
-        try:
-            jpeg, width, height = encode_jpeg(frame.image, self.config.jpeg_quality, self.config.max_image_side)
-        except Exception as exc:
-            now = time.monotonic()
-            record.update(
-                host_request_start_s=None, host_response_available_s=now, duration_s=None,
-                encode_s=now - encode_start, image_bytes=None, image_width=None, image_height=None,
-                status="encode_error", text=None, error_type=type(exc).__name__, error_detail=str(exc), usage=None,
-            )
-            return record
         host_request_start_s = time.monotonic()
         try:
             result = self.client.describe(
@@ -455,10 +439,8 @@ class BaselineRun:
             host_request_start_s=host_request_start_s,
             host_response_available_s=host_response_available_s,
             duration_s=host_response_available_s - host_request_start_s,
-            encode_s=host_request_start_s - encode_start,
+            encode_s=encode_s,
             image_bytes=len(jpeg),
-            image_width=width,
-            image_height=height,
             status=status,
             text=text if status == "ok" else None,
             error_type=None if status == "ok" else (error_type or status),
@@ -488,13 +470,12 @@ class BaselineRun:
             "frame_id": frame_id, "host_time_s": host_time_s, "detail": detail,
         })
 
-    def _log_tick_drop(self, reason: str, tick_index: int, host_tick_s: float, frame: Optional[Frame], **extra: Any) -> None:
+    def _log_tick_drop(self, reason: str, tick_index: int, host_tick_s: float, frame: Frame, **extra: Any) -> None:
         self.state.bump(reason)
         self.drops_log.write({
             "schema_version": SCHEMA_VERSION, "origin": "app", "reason": reason,
             "tick_index": tick_index, "host_tick_s": host_tick_s, "host_time_s": time.monotonic(),
-            "frame_id": frame.frame_id if frame else None,
-            "source_time_s": frame.source_time_s if frame else None,
+            "frame_id": frame.frame_id, "source_time_s": frame.source_time_s,
             **extra,
         })
 
@@ -531,14 +512,14 @@ class BaselineRun:
         end_at = tick_origin + self.config.duration_s if self.config.duration_s else None
         tick_index = 0
         next_tick = tick_origin
-        last_sent_frame_id: Optional[int] = None
         last_draw = -1.0
 
         while True:
             self._drain_results()
             now = time.monotonic()
-            if end_at is not None and now >= end_at and not self.slot.closed.is_set():
-                self.source.stop(EndReason.DURATION_LIMIT)
+            if end_at is not None and now >= end_at and self.run_end_reason is None:
+                self.run_end_reason = "duration_limit"
+                self.source.stop()
             if self.slot.closed.is_set():
                 return  # no dispatch after the source ends; shutdown collects any in-flight request
 
@@ -550,44 +531,40 @@ class BaselineRun:
                         in_flight_request_id=self.in_flight["request_id"],
                         in_flight_frame_id=self.in_flight["frame_id"],
                     )
-                elif frame.frame_id == last_sent_frame_id:
-                    self._log_tick_drop("tick_skipped_no_new_frame", tick_index, next_tick, frame)
                 else:
+                    encode_start = time.monotonic()
+                    jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
+                    encode_s = time.monotonic() - encode_start
                     request_id = uuid.uuid4().hex[:12]
                     self.in_flight = {"request_id": request_id, "frame_id": frame.frame_id}
                     self.state.record_dispatch(frame.frame_id)
-                    self.jobs.put_nowait((frame, request_id, tick_index, next_tick))
-                    last_sent_frame_id = frame.frame_id
+                    self.jobs.put_nowait((frame, jpeg, encode_s, request_id, tick_index, next_tick))
+                # A late tick is still handled once, on the next pass; host_tick_s keeps its scheduled time.
                 tick_index += 1
                 next_tick = tick_origin + tick_index * interval
-                while next_tick <= now:  # the loop itself stalled past whole ticks
-                    self._log_tick_drop("tick_missed_loop_stall", tick_index, next_tick, None)
-                    tick_index += 1
-                    next_tick = tick_origin + tick_index * interval
 
-            if self.display_enabled and now - last_draw >= 1 / 30:
+            if self.display and now - last_draw >= 1 / 30:
                 last_draw = now
                 self._draw()
 
-            wait = max(0.0, min(next_tick - time.monotonic(), 0.02 if self.display_enabled else 0.05))
+            wait = max(0.0, min(next_tick - time.monotonic(), 0.02 if self.display else 0.05))
             self._drain_results(timeout=wait)
 
     def _draw(self) -> None:
         frame = self.slot.latest()
         if frame is None:
             return
-        self.display_used = True
         try:
             cv2.imshow(WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(time.monotonic())))
             key = cv2.waitKey(1) & 0xFF
         except cv2.error as exc:
-            self.display_enabled = False
-            self.display_note = f"display disabled: {exc}".strip()
-            print(f"warning: {self.display_note}; continuing headless", file=sys.stderr)
+            self.display = False
+            self.display_error = str(exc).strip()
+            print(f"warning: display failed ({self.display_error}); continuing headless", file=sys.stderr)
             return
-        if key in (ord("q"), 27):
+        if key in (ord("q"), 27) and self.run_end_reason is None:
             self.run_end_reason = "user_quit"
-            self.source.stop(EndReason.STOPPED)
+            self.source.stop()
 
     # -- shutdown ----------------------------------------------------------
     def _exit_code_for_source_end(self) -> int:
@@ -596,13 +573,15 @@ class BaselineRun:
             self.error_detail = f"{type(self.slot.error).__name__}: {self.slot.error}"
             return 1
         end = self.source.end
-        if self.run_end_reason == "user_quit":
-            return 0
         if end is None:
             self.run_end_reason = "source_ended_without_reason"
             return 1
-        self.run_end_reason = end.reason.value
-        return 2 if end.reason.is_error else 0
+        if end.reason.is_error:
+            self.run_end_reason = end.reason.value
+            return 2
+        if self.run_end_reason is None:  # not already "user_quit" or "duration_limit"
+            self.run_end_reason = end.reason.value
+        return 0
 
     def _finalize(self, exit_code: int, *, interrupted: bool) -> RunResult:
         grace = self.config.shutdown_timeout_s
@@ -610,10 +589,9 @@ class BaselineRun:
             self.source.stop(EndReason.INTERRUPTED if interrupted else EndReason.STOPPED)
         if interrupted:
             self._close_client()  # ask the client to abandon the in-flight request
-        capture_threads = [t for t in self.threads if t.name == "baseline-capture"]
-        for thread in capture_threads:
-            thread.join(grace)
-        if not any(t.is_alive() for t in capture_threads):
+        if self.capture_thread is not None:
+            self.capture_thread.join(grace)
+        if self.capture_thread is None or not self.capture_thread.is_alive():
             self.source.close()  # normally already closed by the capture thread's `with`
 
         if self.in_flight is not None:
@@ -641,7 +619,7 @@ class BaselineRun:
                 self.telemetry.close()
             except Exception:
                 pass
-        if self.display_used:
+        if not self.config.no_display:
             try:
                 cv2.destroyAllWindows()
                 cv2.waitKey(1)
@@ -656,9 +634,9 @@ class BaselineRun:
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
 
     def _close_client(self) -> None:
-        if getattr(self, "_client_closed", False):
+        if self.client_closed:
             return
-        self._client_closed = True
+        self.client_closed = True
         try:
             self.client.close()
         except Exception:
@@ -694,7 +672,7 @@ class BaselineRun:
                 "source_drops": info["drop_counts"],
                 "telemetry_samples": self.telemetry_log.lines,
             },
-            "display": {"enabled": not self.config.no_display, "note": self.display_note},
+            "display": {"enabled": not self.config.no_display, "error": self.display_error},
             "threads_not_joined": [t.name for t in self.threads if t.is_alive()],
             "platform": {
                 "system": platform.system(),

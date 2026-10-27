@@ -40,7 +40,7 @@ runner (#18); change them only with a note to its owner.
 | `--interval-s N` | `2.0` | seconds between VLM invocations |
 | `--duration-s N` | until EOF / q / Ctrl-C | stop after N seconds |
 | `--prompt`, `--max-tokens`, `--request-timeout-s` | | request settings |
-| `--jpeg-quality`, `--max-image-side` | `85`, `0` | frame encoding before the request |
+| `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
 | `--vlm fake\|real`, `--telemetry fake\|real\|off`, `--telemetry-interval-s` | `fake`, `fake`, `0.5` | backends |
 | `--fake-vlm-latency-s`, `--fake-vlm-outcomes` | `0.5`, `ok` | fake client behavior, e.g. `ok,timeout,malformed,empty` |
 | `--run-dir PATH` | `runs/<UTC>_<source>/` | output directory (refuses to overwrite) |
@@ -67,8 +67,7 @@ All field names are provisional until #10 (`schema_version: "0-provisional"`).
   (`ok|timeout|connection_error|http_error|malformed|empty|client_exception|abandoned_at_shutdown`),
   `text` (ok only), `error_type`, `error_detail`, `usage`
 - `drops.jsonl`: `origin` (`app` or `source`), `reason`
-  (`tick_skipped_busy`, `tick_skipped_no_new_frame`, `tick_missed_loop_stall`,
-  `replay_late`, `empty_frame`, `read_failed`), `frame_id`, host times
+  (`tick_skipped_busy`, `replay_late`, `empty_frame`, `read_failed`), `frame_id`, host times
 - `telemetry.jsonl`: one line per sensor reading; unavailable readings are
   `valid: false, value: null`, never `0`
 - `manifest.json`: config, source metadata (backend, requested vs observed
