@@ -104,3 +104,91 @@ print(source.info.as_dict())   # backend, requested vs observed settings, drop c
 Opening fails with `SourceOpenError` (missing file, undecodable video, no
 camera / permission). The capture is released on every exit path, including
 Ctrl-C, and can be reopened.
+
+
+## Local VLM server
+
+Issue #1. One `llama-server` process keeps SmolVLM loaded; the app and
+`src/vlm/client.py` send it one frame per request. CPU only.
+
+### Pinned versions
+
+| What | Version |
+|---|---|
+| llama.cpp | release `b11936`, commit `27b7a8a009de2f5f75d8111b6171381c920df764`, built with `GGML_METAL=OFF` (no GPU backend) |
+| Primary model | [`ggml-org/SmolVLM-500M-Instruct-GGUF`](https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF) rev `72e986006ef53e37cdd3f6d4241c90b0f01df376`: `SmolVLM-500M-Instruct-Q8_0.gguf` + `mmproj-SmolVLM-500M-Instruct-Q8_0.gguf` |
+| Fallback model | [`ggml-org/SmolVLM-256M-Instruct-GGUF`](https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF) rev `b9e4379657e1450d04d02eec8e345667265b0a00`, same file pattern |
+
+SHA-256 of the files:
+
+```
+9d4612de6a42214499e301494a3ecc2be0abdd9de44e663bda63f1152fad1bf4  SmolVLM-500M-Instruct-Q8_0.gguf
+d1eb8b6b23979205fdf63703ed10f788131a3f812c7b1f72e0119d5d81295150  mmproj-SmolVLM-500M-Instruct-Q8_0.gguf
+2a31195d3769c0b0fd0a4906201666108834848db768af11de1d2cef7cd35e65  SmolVLM-256M-Instruct-Q8_0.gguf
+7e943f7c53f0382a6fc41b6ee0c2def63ba4fded9ab8ed039cc9e2ab905e0edd  mmproj-SmolVLM-256M-Instruct-Q8_0.gguf
+```
+
+### Build llama.cpp (once)
+
+```bash
+git clone https://github.com/ggml-org/llama.cpp ~/src/llama.cpp
+cd ~/src/llama.cpp && git checkout b11936
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DGGML_METAL=OFF -DGGML_BLAS=OFF
+cmake --build build -j 8 --target llama-server llama-mtmd-cli
+./build/bin/llama-server --list-devices     # expect "(none)": CPU only
+```
+
+Tested on macOS (Apple M2). On Linux the same commands build a CPU-only
+server (`GGML_METAL` is ignored there); not yet verified on Ubuntu.
+
+### Download the model (once)
+
+```bash
+mkdir -p ~/models/smolvlm && cd ~/models/smolvlm
+REV=72e986006ef53e37cdd3f6d4241c90b0f01df376
+for f in SmolVLM-500M-Instruct-Q8_0.gguf mmproj-SmolVLM-500M-Instruct-Q8_0.gguf; do
+  curl -L --fail -o "$f" "https://huggingface.co/ggml-org/SmolVLM-500M-Instruct-GGUF/resolve/$REV/$f"
+done
+shasum -a 256 *.gguf    # compare with the table above
+```
+
+### Start the server (keep it running)
+
+```bash
+~/src/llama.cpp/build/bin/llama-server \
+  -m ~/models/smolvlm/SmolVLM-500M-Instruct-Q8_0.gguf \
+  --mmproj ~/models/smolvlm/mmproj-SmolVLM-500M-Instruct-Q8_0.gguf \
+  --host 127.0.0.1 --port 8080 -ngl 0 --no-mmproj-offload --parallel 1 -c 4096
+```
+
+- Ready when `curl http://127.0.0.1:8080/health` returns `{"status":"ok"}` (under a second).
+- `--parallel 1`: one request at a time. With the default (4 slots), a new request
+  can run alongside one the client already gave up on, which skews timing and energy.
+- `-ngl 0 --no-mmproj-offload`: no GPU offload even on a build that has a GPU backend.
+- `-c 4096`: a request uses about 300 tokens (image + prompt + answer).
+
+The app records the server's build, model file, slot count and context in each
+run's `manifest.json` (`vlm.server`).
+
+### Smoke check
+
+```bash
+python -m src.vlm.smoke                      # add --image some.jpg to include a real photo
+```
+
+It describes two drawn images twice each, checks that they get different
+answers, and checks that a server that isn't running shows up as
+`connection_error`. Ends with `PASS` (exit 0) or `FAIL`.
+
+### Behavior worth knowing
+
+- **Latency (M2, CPU, 4 threads):** about 1.5 s for a 640x480 image, about 3 s for a
+  1280x720 webcam frame. Almost all of it is image processing, not text generation,
+  which is also why the 256M fallback is barely faster (2.9 s vs 3.0 s median).
+- **Prompt cache off:** the client sends `cache_prompt: false`, so an identical image is
+  processed again instead of answered from cache (a cached repeat took 0.05 s).
+- **Timeouts:** when the client gives up, the server notices the closed connection and
+  cancels the request about 1 s later. With `--parallel 1` the next request waits for
+  that, so the first request after a timeout can take up to ~1 s longer.
+- **Output bound:** `max_tokens` caps every answer; a cut-off answer is logged with
+  `finish_reason: "length"`.

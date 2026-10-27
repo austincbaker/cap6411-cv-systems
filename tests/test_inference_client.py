@@ -158,7 +158,9 @@ def test_bad_base_url_is_rejected(url):
 
 
 def test_health(server):
-    assert LlamaServerClient(server.url).health() is True
+    client = LlamaServerClient(server.url)
+    assert client.health() is True
+    assert client.metadata()["server"] == {"build_info": "b0-fake", "model_path": "/models/fake.gguf", "total_slots": 1, "n_ctx": 4096}
     server.healthy = False
     assert LlamaServerClient(server.url).health() is False
     assert LlamaServerClient(f"http://127.0.0.1:{free_port()}", timeout_s=1).health() is False

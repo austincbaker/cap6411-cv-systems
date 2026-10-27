@@ -65,6 +65,9 @@ class FakeServer:
             def do_GET(self):
                 if self.path == "/health":
                     self._send(200 if fake.healthy else 503, b'{"status": "ok"}' if fake.healthy else b'{"error": "loading"}')
+                elif self.path == "/props":
+                    self._send(200, json.dumps({"build_info": "b0-fake", "model_path": "/models/fake.gguf", "total_slots": 1,
+                                                "default_generation_settings": {"n_ctx": 4096}}).encode())
                 else:
                     self._send(404, b"{}")
 

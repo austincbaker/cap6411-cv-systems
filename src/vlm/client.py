@@ -67,19 +67,34 @@ class LlamaServerClient:
         self.port = url.port or 80
         self.timeout_s = timeout_s
         self.temperature = temperature
+        self.server_props: Optional[dict] = None  # model/build/slots reported by the server, filled by health()
         self._conn: Optional[http.client.HTTPConnection] = None  # the request in progress, if any
 
     def metadata(self) -> dict:
         return {"kind": "llama-server", "url": f"http://{self.host}:{self.port}", "timeout_s": self.timeout_s,
-                "temperature": self.temperature, "cache_prompt": False}
+                "temperature": self.temperature, "cache_prompt": False, "server": self.server_props}
 
     def health(self) -> bool:
-        """True when the server reports it is loaded and ready."""
+        """True when the server reports it is loaded and ready. Also records what it is running."""
         try:
             status, _ = self._request("GET", "/health", None)
+            if status != 200:
+                return False
+            status, raw = self._request("GET", "/props", None)
         except (OSError, http.client.HTTPException):
             return False
-        return status == 200
+        if status == 200:
+            try:
+                props = json.loads(raw)
+                self.server_props = {
+                    "build_info": props.get("build_info"),
+                    "model_path": props.get("model_path"),
+                    "total_slots": props.get("total_slots"),
+                    "n_ctx": (props.get("default_generation_settings") or {}).get("n_ctx"),
+                }
+            except ValueError:
+                pass
+        return True
 
     def describe(
         self, *, image_jpeg: bytes, prompt: str, max_tokens: int, frame_id: int, request_id: str
