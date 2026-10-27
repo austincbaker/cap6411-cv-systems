@@ -28,6 +28,7 @@ from .frame import (
     Frame,
     SourceBase,
     SourceOpenError,
+    backend_name,
     frame_is_empty,
     release_quietly,
     valid_fps,
@@ -81,7 +82,6 @@ class WebcamSource(SourceBase):
 
     def _open(self) -> None:
         info = self.info
-        info.opencv_version = cv2.__version__
         info.time_method = "none_host_capture_only"
         info.requested_width = self.requested_width
         info.requested_height = self.requested_height
@@ -100,13 +100,12 @@ class WebcamSource(SourceBase):
         if self.requested_fps:
             capture.set(cv2.CAP_PROP_FPS, float(self.requested_fps))
         # Keep the driver from handing us stale frames; not every backend honors this.
-        info.buffer_size_requested = 1
         info.buffer_size_accepted = bool(capture.set(cv2.CAP_PROP_BUFFERSIZE, 1.0))
 
-        info.backend = _backend_name(capture)
+        info.backend = backend_name(capture)
         reported_fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
-        info.observed_fps = reported_fps if valid_fps(reported_fps) else None
-        if info.observed_fps is None:
+        info.reported_fps = reported_fps if valid_fps(reported_fps) else None
+        if info.reported_fps is None:
             info.notes.append(f"backend reported unusable fps {reported_fps!r}; see measured_fps")
 
         # The first frame proves the device really delivers images and gives the true dimensions.
@@ -145,9 +144,3 @@ class WebcamSource(SourceBase):
                     f"{self._consecutive_failures} consecutive failed reads",
                 )
 
-
-def _backend_name(capture: Any) -> Optional[str]:
-    try:
-        return str(capture.getBackendName())
-    except Exception:
-        return None
