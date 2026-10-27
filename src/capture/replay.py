@@ -11,7 +11,7 @@ Timing
   An unusable timestamp *and* an invalid fps fail at open.
 - Pacing: the run clock starts at the first ``read()`` (after open/decoder
   checks). Frame i is due at ``start + (t_i - t_0)`` on the monotonic clock.
-  Early frames wait; frames already later than ``late_tolerance_s`` past their
+  Early frames wait; frames already more than one frame period past their
   deadline are skipped without decoding and reported as ``replay_late``. A slow
   decoder or slow consumer therefore causes recorded drops, never slowed or
   accelerated playback.
@@ -47,7 +47,7 @@ from .frame import (
     valid_fps,
 )
 
-DEFAULT_LATE_TOLERANCE_S = 0.1
+FALLBACK_FRAME_PERIOD_S = 0.1  # only when neither fps nor two timestamps are known
 
 
 class ReplaySource(SourceBase):
@@ -57,7 +57,6 @@ class ReplaySource(SourceBase):
         self,
         path: str,
         *,
-        late_tolerance_s: Optional[float] = None,
         max_consecutive_decode_failures: int = 5,
         clock: Callable[[], float] = time.monotonic,
         sleep: Optional[Callable[[float], Any]] = None,
@@ -65,13 +64,9 @@ class ReplaySource(SourceBase):
         capture_factory: Callable[..., Any] = cv2.VideoCapture,
     ) -> None:
         super().__init__(str(path), clock=clock, on_drop=on_drop, capture_factory=capture_factory)
-        if late_tolerance_s is not None and not (late_tolerance_s >= 0):
-            raise ValueError("late_tolerance_s must be >= 0")
         if max_consecutive_decode_failures < 1:
             raise ValueError("max_consecutive_decode_failures must be >= 1")
         self.path = str(path)
-        self._requested_late_tolerance_s = late_tolerance_s
-        self.late_tolerance_s = DEFAULT_LATE_TOLERANCE_S
         self.max_consecutive_decode_failures = max_consecutive_decode_failures
         # Default sleep wakes early when stop() is called from another thread.
         self._sleep = sleep if sleep is not None else self._stop_event.wait
@@ -81,13 +76,12 @@ class ReplaySource(SourceBase):
         self._fps: Optional[float] = None
         self._use_media_time = True
         self._buffered: list[tuple[Any, float]] = []
-        self._buffered_eof = False
         self._start_host_s: Optional[float] = None
         self._t0_s: Optional[float] = None
         self._prev_t_s: Optional[float] = None
         self._prev_deadline_s: Optional[float] = None
         self._consecutive_decode_failures = 0
-        self._frame_period_s = DEFAULT_LATE_TOLERANCE_S
+        self._frame_period_s = FALLBACK_FRAME_PERIOD_S
 
     # -- open ---------------------------------------------------------------
     def _open(self) -> None:
@@ -150,19 +144,14 @@ class ReplaySource(SourceBase):
         elif ok:
             # read() succeeded but returned an empty image: report it as an empty_frame drop.
             self._buffered.append((None, first_t))
-        else:
-            self._buffered_eof = True
+        # If the second read failed at end of stream, the next grab() fails too and ends the replay.
 
         if self._fps is not None:
             self._frame_period_s = 1.0 / self._fps
         elif second_t is not None and second_t > first_t:
             self._frame_period_s = second_t - first_t
         else:
-            self._frame_period_s = DEFAULT_LATE_TOLERANCE_S
-        if self._requested_late_tolerance_s is not None:
-            self.late_tolerance_s = self._requested_late_tolerance_s
-        else:
-            self.late_tolerance_s = self._frame_period_s
+            self._frame_period_s = FALLBACK_FRAME_PERIOD_S
 
     # -- read ---------------------------------------------------------------
     def _read(self) -> Optional[Frame]:
@@ -175,7 +164,7 @@ class ReplaySource(SourceBase):
             if self._buffered:
                 image, t_s = self._buffered.pop(0)
                 decoded = True
-            elif self._buffered_eof or not self._capture.grab():
+            elif not self._capture.grab():
                 return self._end_of_stream()
             else:
                 t_s = self._source_time(self._next_frame_id)
@@ -184,7 +173,7 @@ class ReplaySource(SourceBase):
             deadline = self._deadline(t_s)
 
             now = self._clock()
-            if now > deadline + self.late_tolerance_s:
+            if now > deadline + self._frame_period_s:
                 self._record_drop(frame_id, "replay_late", f"{now - deadline:.4f}s past deadline")
                 continue
 
@@ -212,7 +201,7 @@ class ReplaySource(SourceBase):
                 now = self._clock()
             if self._stop_event.is_set():
                 return self._finish(self._stop_reason, "stop requested")
-            return self._deliver(frame_id, image, t_s, deadline)
+            return self._deliver(frame_id, image, t_s)
 
     def _source_time(self, frame_index: int) -> float:
         if self._use_media_time:
