@@ -39,8 +39,7 @@ class EndReason(str, enum.Enum):
     INCOMPLETE_SOURCE = "incomplete_source"  # replay stopped well before the reported frame count
     DECODE_FAILURES = "decode_failures"  # too many consecutive empty/undecodable frames
     DISCONNECTED = "disconnected"  # webcam stopped returning frames after a successful open
-    STOPPED = "stopped"  # consumer called stop()
-    DURATION_LIMIT = "duration_limit"  # consumer stopped the source at its configured run length
+    STOPPED = "stopped"  # consumer called stop() (e.g. run length reached, user quit)
     INTERRUPTED = "interrupted"  # KeyboardInterrupt while the source was open
     CONSUMER_ERROR = "consumer_error"  # downstream exception while the source was open
 
