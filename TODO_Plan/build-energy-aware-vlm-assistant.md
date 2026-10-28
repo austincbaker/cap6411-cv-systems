@@ -18,7 +18,7 @@ Austin and Alejandro own the core runtime. James and Shawn own research and eval
 
 **Verified from the conversation:** The team has approximately one month. Austin and Alejandro have the most development availability. James and Shawn have less coding time but should each own a relevant software component used in the final results.
 
-**Verified in the repository:** `README.md` currently contains only the project heading. Application structure, commands, models, and tests described below are proposed; their implementation has not been verified.
+**Repository baseline at planning time:** `README.md` contained only the project heading. **Implementation update (rev. 5):** Item `1a` now has a tested persistent client and a CPU smoke check on the WSL2 experiment platform (D11, rev. 6); owner review closes it. Item `1b` has implemented collection and raw traces; measured energy awaits the unplugged go/no-go (D12) because the traces were taken plugged in. See `docs/validation-1a-1b.md`. Other application components remain unimplemented.
 
 The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [FastVLM](https://arxiv.org/abs/2412.13303), and [MobileVLM](https://arxiv.org/abs/2312.16886). These are supplied research references. This plan does not independently verify the performance claims or dataset details in earlier discussion.
 
@@ -28,7 +28,7 @@ The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [F
 
 **Implementation-time checks retained for Week 1:** Finalize the event vocabulary using the default workspace task, verify a supported and sufficiently responsive model, check the actual laptop/sensors, and confirm public clip access and fit. These are assigned discovery tasks, not assumptions that their outcomes are already known.
 
-**Planning-quality risk (rev. 4):** A repository `AGENTS.md` now records project purpose, planned layout, plan-document and ownership rules, and data/measurement-integrity rules. No committed implementation code, dependency manifest or test setup exists yet; its setup and test commands remain TODO until item `1a` adds them. Follow the explicit plan without inventing existing conventions.
+**Planning-quality risk (rev. 5, updated rev. 6):** `AGENTS.md` records repository ownership, contracts and platform acceptance requirements. `pyproject.toml`, `uv.lock`, README commands and focused tests now exist. Sensor acceptance awaits the `1b` unplugged go/no-go.
 
 ---
 
@@ -92,7 +92,7 @@ The original Design choices remain settled. Stable identifiers below let item pl
 
 **Document authority:** `TODO_Plan/build-energy-aware-vlm-assistant.md` is the canonical master plan. `energy-aware-vlm-implementation/plan.md` is its synchronized reading copy, with local links adjusted for that directory. Future decisions must update the canonical plan and refresh the reading copy together; no separate decisions file is used.
 
-**Next deliverable (rev. 2):** Implement the five confirmed, expanded Phase 1 starting items: `1a`, `1b`, `1c`, `1e` and `1f`. Their detailed plans are ready; implementation remains not started. The integrated baseline `1d` becomes dependency-ready after `1a`, `1b` and `1c` are implemented, not merely planned. See the [implementation index](../energy-aware-vlm-implementation/README.md) for item links and status.
+**Next deliverable (rev. 5):** Review and close the `1a` implementation, whose WSL2 smoke check counts under D11; run the `1b` unplugged go/no-go by 2026-11-01; and implement the independent `1c`, `1e` and `1f` items. The `1b` collection API is available for integration, but its plugged-in WSL traces do not qualify final energy measurements. Item `1d` still requires its capture and telemetry prerequisites. See the [implementation index](../energy-aware-vlm-implementation/README.md) for item links and status.
 
 ### GitHub priorities and ownership (rev. 3)
 
@@ -199,7 +199,7 @@ Required command-line behavior includes useful errors for malformed input, separ
 
 - **Outcome:** A reproducible fixed-interval assistant runs on the selected machine and produces preliminary telemetry.
 - **Dependencies / entry criteria (rev. 1):** Ubuntu 22.04.5 LTS is selected. Independent model/sensor verification, input-source work, pilot-data work and protocol work may begin now; successful hardware/model checks are required before the integrated baseline is accepted.
-- [ ] **Austin:** Configure llama.cpp and implement persistent requests, bounded responses and errors in `src/vlm/client.py`; record build/model revisions.
+- [ ] **Austin:** Configure llama.cpp and implement persistent requests, bounded responses and errors in `src/vlm/client.py`; record build/model revisions. Software and the WSL2 platform smoke check are implemented; owner review closes the item.
 - [ ] **Austin:** Verify available Ubuntu 22.04.5 LTS energy/battery telemetry, implement the selected adapter in `src/energy/monitor.py`, and confirm its units, coverage and limitations.
 - [ ] **Alejandro:** Implement webcam and real-time recorded input in `src/capture/webcam.py` and `src/capture/replay.py`.
 - [ ] **Alejandro:** Connect fixed-interval inference and minimal scene display in `app/main.py` and `app/state.py`.
@@ -286,8 +286,8 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 
 ### Tests
 
-- [ ] `tests/test_inference_client.py` — Austin verifies bounded image requests and explicit transport failures using a fake service; selected-model compatibility still requires a live smoke check.
-- [ ] `tests/test_energy_monitor.py` — Austin verifies timestamped raw/unit handling, missing sensors and collection cleanup using fake readers; actual sensor availability still requires a laptop check.
+- [x] `tests/test_inference_client.py` — Austin verifies bounded image requests and explicit transport failures using a fake service; selected-model compatibility still requires a live smoke check.
+- [x] `tests/test_energy_monitor.py` — Austin verifies timestamped raw/unit handling, missing sensors and collection cleanup using fake readers; actual sensor availability still requires a laptop check.
 - [ ] `tests/test_capture_sources.py` — Alejandro verifies source timing, replay pacing and release behavior using controlled capture/clock inputs; actual camera and replay checks remain required.
 - [ ] `tests/test_event_matching.py` — James verifies one-to-one matching, duplicates, wrong labels, tolerance boundaries, delayed availability and overlapping events using hand-scored cases.
 - [ ] `tests/test_event_metrics.py` — James verifies empty predictions, no-event clips, false alarms and undefined metric handling.
@@ -340,14 +340,14 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 
 - **R01 — Late handoff:** James and Shawn cannot complete tools if schemas arrive in Week 4. Deliver small valid fixtures by the end of Week 2 and coordinate any subsequent format changes.
 - **R02 — Limited availability:** Give James the scorer and Shawn the runner/analyzer as bounded deliverables. Keep the viewer and extra visualizations optional; pair briefly on setup and review numerical correctness.
-- **R03 — Hardware telemetry (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters; package energy is unavailable. Whole-laptop battery energy, measured unplugged, is the only candidate and must pass the `1b` go/no-go by 2026-11-01. Unplugged runs limit trial length per charge and include Windows background activity; `2f` controls AC/battery state, start charge, power plan and background apps. If no source qualifies, report energy as unavailable rather than estimated.
+- **R03 — Hardware telemetry (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters; package energy is unavailable. Whole-laptop battery energy, measured unplugged, is the only candidate and must pass the `1b` go/no-go by 2026-11-01. Unplugged runs limit trial length per charge and include Windows background activity; `2f` controls AC/battery state, start charge, power plan and background apps. If no source qualifies, report energy as unavailable rather than estimated. Development traces under WSL2 (Revision 5) showed the BAT1 stored-energy and power values constant while plugged in, so they qualify nothing until the unplugged go/no-go passes.
 - **R04 — Scope growth:** Freeze core features at the end of Week 3. Defer learned gating and advanced visual/cache optimizations when required evaluation is at risk.
 - **R05 — Small-model accuracy:** Separate gate misses from VLM errors, use a narrow task vocabulary and retain difficult/negative examples in the evaluation.
 - **R06 — Unfair comparisons:** Include matched invocation counts and identical primary model settings; document overload, output limits and frame drops.
 - **R07 — Data mismatch:** Public action or tracking labels may not describe the selected events. Annotate a small compatible subset rather than treating all existing labels as ground truth for this task.
 - **R08 — Measurement noise:** Use long enough windows, repeat key trials, control power settings and include uncertainty. Replay and webcam overhead differ; compare policies within each input mode.
 
-- **R09 — Missing repository conventions (rev. 4):** `AGENTS.md` now exists and records repository-wide conventions, but no committed dependency/test setup exists yet. Item `1a` documents the development setup in `README.md` and replaces the corresponding `AGENTS.md` TODOs; do not claim existing APIs or runnable commands until implemented. Live model/camera/sensor checks count only on the designated Ubuntu laptop.
+- **R09 — Repository conventions established (rev. 5):** The new `AGENTS.md` applies. Its setup and test sections now match the implemented `pyproject.toml`, `uv.lock` and README commands. WSL2 checks count as platform evidence under D11; sensor acceptance follows the `1b` go/no-go.
 - **R10 — Shared planning copies and files (rev. 1):** Keep the canonical master and reading copy synchronized. Coordinate edits to shared method/contract documents; later evaluation tools consume agreed files rather than reaching into application internals.
 
 ---
@@ -384,7 +384,7 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 ## High-Level Change Summary
 
 - **Target outcome:** A local webcam assistant detects meaningful changes under a configurable energy allowance, with measured quality and responsiveness.
-- **Current state:** The conversation establishes a project concept and team roles; the repository contains a placeholder README and no verified implementation.
+- **Current state (rev. 5):** Inference and telemetry software are implemented and smoke-checked on the WSL2 platform. The `1b` unplugged energy go/no-go and the remaining application/evaluation work are pending.
 - **Major changes:**
   - Week 1 establishes persistent inference, webcam/replay input, a fixed-interval baseline and usable telemetry.
   - Week 2 adds event gating, labeled data and stable contracts that enable independent evaluation development.
@@ -462,9 +462,24 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 **Scope unchanged:** No decision, dependency edge, owner or priority changed. No application code was implemented and all implementation statuses are unchanged.
 
 
+### Revision 5 — 2026-10-27 — first two Austin implementation items
+
+**Trigger:** Austin authorized implementation of `1a` and `1b`.
+
+**Implemented:** Persistent bounded image inference, an explicitly CPU-only pinned llama.cpp setup, a repeated-image smoke command, Linux powercap/battery discovery, timestamped raw telemetry collection, focused tests and component documentation. Package dependencies are recorded in `pyproject.toml` and `uv.lock`.
+
+**Development verification (not designated-laptop acceptance):** Four image requests passed on one WSL CPU server process (mean 2.4801 seconds; 24/18/24/18 output tokens under a 32-token bound). Stopping the service produced an explicit connection failure with no retry. Idle and inference-period raw battery traces were saved and documented. Automated tests and Ruff checks passed; see the validation document for commands and evidence.
+
+**Status:** Both software components are implemented. `1a` designated-laptop model acceptance remains open, and `1b` qualified physical-energy validation remains open. This Ubuntu environment is WSL2, has no exposed powercap counters and reports constant plugged-in battery values, so the traces establish neither CPU/laptop consumption nor energy savings. R03 records the concrete limitation.
+
+**Scope and publication:** No webcam, change gate, energy-budget controller or final evaluator was added. GitHub issues remain open for review and the source changes have not been pushed. All other item statuses are unchanged.
+
+**Repository instructions discovered during implementation:** Commit `d61ffd4` introduced `AGENTS.md` after the initial survey. Its final smoke-check policy is applied: WSL measurements are retained only as development evidence, both items remain in progress pending the designated-laptop checks, and setup/test guidance is updated from verified code.
+
+
 ### Revision 6 — 2026-10-27 — review fixes, WSL2 platform and dated milestones
 
-**Trigger:** Austin requested a plan review; a second review confirmed the findings with corrections. Austin chose WSL2 as the experiment platform, the long-run battery fallback, fixture-based controller logic with live calibration in `3c`, a stability smoke run in `3c`, and pencils down on 2026-12-01. Revision 5 (the `1a`/`1b` implementation) is on branch `feat/1a-1b-inference-telemetry` pending merge.
+**Trigger:** Austin requested a plan review; a second review confirmed the findings with corrections. Austin chose WSL2 as the experiment platform, the long-run battery fallback, fixture-based controller logic with live calibration in `3c`, a stability smoke run in `3c`, and pencils down on 2026-12-01. Revision 5 (the `1a`/`1b` implementation) was developed on branch `feat/1a-1b-inference-telemetry` and rebased onto this revision. The team agreed on that WSL2 implementation; under D11 its WSL2 smoke check and traces are platform evidence, superseding Revision 5's "development evidence only" status. `1b` measured-energy acceptance still requires the unplugged go/no-go.
 
 **Decision changes:**
 

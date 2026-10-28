@@ -5,7 +5,7 @@
 **GitHub blocked by:** None
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: ⬜ Not started
+**Status**: 🟡 In progress
 **Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D08, D11; R03, R08
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md)
@@ -17,8 +17,8 @@ Owner: Austin, with Shawn reviewing measurement validity. Capture timestamped po
 ## Tasks
 
 - [ ] Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements.
-- [ ] Implement sample collection with timestamps, validity and lifecycle cleanup.
-- [ ] Provide a short trace and document missing samples and counter behavior for Shawn.
+- [x] Implement sample collection with timestamps, validity and lifecycle cleanup.
+- [x] Provide a short trace and document missing samples and counter behavior for Shawn.
 
 ## Files to be touched
 
@@ -36,8 +36,8 @@ Not a port. The existing repository contains a placeholder `README.md` and a Pyt
 
 ## Acceptance criteria
 
-- [ ] A short run records a declared power/energy domain and units.
-- [ ] Unsupported sensors or gaps are recorded as unavailable instead of zero consumption.
+- [x] A short run records a declared power/energy domain and units.
+- [x] Unsupported sensors or gaps are recorded as unavailable instead of zero consumption.
 - [ ] A dated go/no-go names the qualified whole-laptop energy source, or records that measured energy is unavailable; every trace records AC and battery state.
 
 ## Definition of Done
@@ -46,10 +46,10 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements. | [Tasks](#tasks) | The chosen sensor returns interpretable samples, or an unavailable sensor is explicitly reported. | — | ⬜ |
-| 2 | Implement sample collection with timestamps, validity and lifecycle cleanup. | [Tasks](#tasks) | A finite run produces a trace aligned with its measured start/end interval. | — | ⬜ |
-| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | Shawn can explain the energy domain and calculate a check value from the trace. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 1 | Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements. | [Tasks](#tasks) | The chosen sensor returns interpretable samples, or an unavailable sensor is explicitly reported. | src/energy/monitor.py:78, docs/validation-1a-1b.md:37 | 🟡 |
+| 2 | Implement sample collection with timestamps, validity and lifecycle cleanup. | [Tasks](#tasks) | A finite run produces a trace aligned with its measured start/end interval. | src/energy/monitor.py:188, src/energy/monitor.py:314, tests/test_energy_monitor.py:147 | 🟢 |
+| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | Shawn can explain the energy domain and calculate a check value from the trace. | docs/examples/telemetry-wsl-idle.csv:1, docs/examples/telemetry-wsl-inference.csv:1, docs/methodology.md:91 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/validation-1a-1b.md:37, tests/test_energy_monitor.py:163 | 🟢 |
 
 ## Implementation notes
 
@@ -95,3 +95,8 @@ A readable trace on the actual Ubuntu laptop establishes the positive collection
 - `tests/test_energy_monitor.py` — proposed fake-sensor checks; no privileged hardware or live battery required in automated tests.
 
 The original open check remains pending until hardware is inspected. Sensor choice is evidence-led within the existing plan; do not add macOS/Windows backends or unrequested monitoring infrastructure.
+
+
+## Execution record — 2026-10-27
+
+The collection software, fake-sensor tests and short raw traces are implemented. This Ubuntu instance is WSL2: powercap counters are absent and the exposed battery is not discharging. The raw battery samples carry explicit quality flags and cannot establish physical energy consumption. Task/row 1 and the hardware-validation question remain open until the unplugged go/no-go (due 2026-11-01) qualifies a whole-laptop battery source. No energy-savings claim is made. See `docs/validation-1a-1b.md` and `docs/methodology.md`. GitHub issue #2 remains open.

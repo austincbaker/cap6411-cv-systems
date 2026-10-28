@@ -1,0 +1,29 @@
+{
+  "profile_version": 1,
+  "model_alias": "smolvlm2-500m-q8",
+  "llama_cpp_repository": "https://github.com/ggml-org/llama.cpp.git",
+  "llama_cpp_revision": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+  "llama_cpp_release": "v0.7.0",
+  "hf_repository": "ggml-org/SmolVLM2-500M-Video-Instruct-GGUF",
+  "hf_revision": "ccd7aae53bcb1997355c2f094959e72b3642ce17",
+  "quantization": "Q8_0",
+  "model": {
+    "filename": "SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+    "sha256": "6f67b8036b2469fcd71728702720c6b51aebd759b78137a8120733b4d66438bc"
+  },
+  "projector": {
+    "filename": "mmproj-SmolVLM2-500M-Video-Instruct-Q8_0.gguf",
+    "sha256": "921dc7e259f308e5b027111fa185efcbf33db13f6e35749ddf7f5cdb60ef520b"
+  },
+  "host": "127.0.0.1",
+  "port": 8080,
+  "threads": 4,
+  "context_size": 4096,
+  "max_output_tokens": 64,
+  "connect_timeout_s": 5,
+  "read_timeout_s": 120,
+  "fallback": {
+    "hf_repository": "ggml-org/SmolVLM-256M-Instruct-GGUF",
+    "note": "Fallback candidate only; requires its own verified revision, artifacts and measurements before use."
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "record_version": 1,
+  "run_id": "523aa0fdd6524825a1a399979cc317bd",
+  "origin_monotonic_s": 199036.622684756,
+  "platform": "Linux-6.6.87.1-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "wsl": true,
+  "sysfs_root": "/sys",
+  "sensors": [
+    {
+      "sensor_id": "battery:BAT1:energy_now",
+      "path": "/sys/class/power_supply/BAT1/energy_now",
+      "name": "BAT1",
+      "domain": "battery_stored_energy",
+      "quantity": "stored_energy",
+      "raw_unit": "uWh",
+      "unit": "J",
+      "scale": 0.0036,
+      "max_energy_range_j": null,
+      "parent_sensor_id": null,
+      "battery_path": "/sys/class/power_supply/BAT1",
+      "readable_at_discovery": true,
+      "discovery_error": null
+    },
+    {
+      "sensor_id": "battery:BAT1:power_now",
+      "path": "/sys/class/power_supply/BAT1/power_now",
+      "name": "BAT1",
+      "domain": "battery_flow",
+      "quantity": "power",
+      "raw_unit": "uW",
+      "unit": "W",
+      "scale": 1e-06,
+      "max_energy_range_j": null,
+      "parent_sensor_id": null,
+      "battery_path": "/sys/class/power_supply/BAT1",
+      "readable_at_discovery": true,
+      "discovery_error": null
+    }
+  ],
+  "warnings": [
+    "no powercap energy counters found; CPU/package energy is unavailable",
+    "WSL telemetry requires physical-host validation before energy claims"
+  ],
+  "requested_duration_s": 10.0,
+  "requested_interval_s": 1.0,
+  "completed": true,
+  "valid_rows": 22,
+  "invalid_rows": 0,
+  "measured_duration_s": 10.00119843002176
+}
