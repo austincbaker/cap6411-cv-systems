@@ -1,8 +1,29 @@
-# Sensor collection methodology
+# Methodology
 
 This document currently covers Austin's item 1b collector and its hardware checks.
 Shawn owns the later experiment protocol, controls, repeat strategy and analysis in items
 1f, 2f, 3f and 3g; their completion is not implied by this sensor documentation.
+
+## Research questions
+
+The team will finalize the research questions with the event definitions, scoring rubric,
+baselines and energy budget. The questions must use the same event-quality and
+response-delay definitions as the final evaluation contract.
+
+## Related work and research framing
+
+The report will frame the work against compact VLMs (including SmolVLM, MobileVLM and
+FastVLM), conditional and streaming perception, and edge energy-aware inference. Its
+contribution is runtime scheduling: comparing fixed-interval, event-driven and
+budget-aware VLM invocation under the same replay content and measurement controls.
+
+## Measurement protocol
+
+Shawn's protocol will specify the trial controls, baseline configurations, repeat strategy,
+randomized order, warm-up, missing-data handling and energy normalization before the final
+evaluation freeze.
+
+## Sensor collection methodology
 
 ## Quantities and domains
 
