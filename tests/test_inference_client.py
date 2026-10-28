@@ -24,7 +24,8 @@ def test_repeated_images_keep_one_transport_and_fresh_evidence():
                     "prompt_tokens": 20,
                     "completion_tokens": 7,
                     "prompt_tokens_details": {"cached_tokens": 0},
-                }
+                },
+                timings={"prompt_ms": 812.5, "predicted_ms": 1204},
             ),
         )
 
@@ -38,6 +39,7 @@ def test_repeated_images_keep_one_transport_and_fresh_evidence():
     assert first.source_time_s == 1.25
     assert first.response_available_s == 102.0
     assert first.output_tokens == 7 and first.cached_tokens == 0
+    assert first.server_prompt_ms == 812.5 and first.server_predicted_ms == 1204.0
     assert first.request_id != second.request_id
     assert len(requests) == 2
     for payload, image in zip(requests, [b"first image", b"second image"]):
@@ -151,6 +153,22 @@ def test_unavailable_or_invalid_usage_is_missing(usage):
     assert result.prompt_tokens is None
     assert result.output_tokens is None
     assert result.cached_tokens is None
+
+
+@pytest.mark.parametrize(
+    "timings",
+    [None, [], {"prompt_ms": True, "predicted_ms": "9"}, {"prompt_ms": -1.0}],
+)
+def test_unavailable_or_invalid_server_timings_are_missing(timings):
+    with VLMClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=completion(timings=timings)),
+        )
+    ) as client:
+        result = client.infer(b"image", frame_id="a")
+    assert result.ok
+    assert result.server_prompt_ms is None
+    assert result.server_predicted_ms is None
 
 
 @pytest.mark.parametrize(

@@ -79,7 +79,7 @@ uv run ruff check src scripts tests
 uv run ruff format --check src scripts tests
 ```
 
-The 76 tests cover image payloads, bounded output, missing usage counts, connection/HTTP/JSON
+The 80 tests cover image payloads, bounded output, missing usage counts and server timings, connection/HTTP/JSON
 failures, timeout uncertainty, no automatic retry, sample unit conversions, domain
 hierarchy, alias deduplication, counter decreases, missing/invalid sensor reads, finite
 cadence, interruption and CLI output behavior. Fakes do not substitute for the live model

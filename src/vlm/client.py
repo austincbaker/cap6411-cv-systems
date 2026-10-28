@@ -66,6 +66,8 @@ class InferenceResult:
     prompt_tokens: int | None = None
     output_tokens: int | None = None
     cached_tokens: int | None = None
+    server_prompt_ms: float | None = None
+    server_predicted_ms: float | None = None
     finish_reason: str | None = None
     http_status: int | None = None
     error: str | None = None
@@ -81,6 +83,12 @@ class InferenceResult:
 
 def _token_count(value: Any) -> int | None:
     return value if type(value) is int and value >= 0 else None
+
+
+def _milliseconds(value: Any) -> float | None:
+    if type(value) not in {int, float} or not math.isfinite(value) or value < 0:
+        return None
+    return float(value)
 
 
 class VLMClient:
@@ -249,6 +257,9 @@ class VLMClient:
         usage = usage if isinstance(usage, dict) else {}
         detail = usage.get("prompt_tokens_details")
         detail = detail if isinstance(detail, dict) else {}
+        # llama-server's own prompt/generation durations; absent on other servers.
+        timings = data.get("timings")
+        timings = timings if isinstance(timings, dict) else {}
         finish = choice.get("finish_reason")
         return result(
             "ok",
@@ -257,5 +268,7 @@ class VLMClient:
             prompt_tokens=_token_count(usage.get("prompt_tokens")),
             output_tokens=_token_count(usage.get("completion_tokens")),
             cached_tokens=_token_count(detail.get("cached_tokens")),
+            server_prompt_ms=_milliseconds(timings.get("prompt_ms")),
+            server_predicted_ms=_milliseconds(timings.get("predicted_ms")),
             finish_reason=finish if isinstance(finish, str) else None,
         )

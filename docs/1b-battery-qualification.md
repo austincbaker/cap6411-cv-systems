@@ -35,7 +35,11 @@ Evidence: [raw samples](examples/1b-battery-qualification/samples.jsonl),
 [post-run granularity assessment](examples/1b-battery-qualification/assessment.json).
 These are unchanged copies of local run outputs, except the explicitly separate
 post-run assessment. The manifest hashes the executed qualification script; its exact
-snapshot remains in the ignored original results directory. Subsequent source changes
+snapshot is preserved as
+[qualification-script-at-run.py.txt](examples/1b-battery-qualification/qualification-script-at-run.py.txt)
+(SHA-256 `67dadf45…`, matching `script_sha256`), alongside the
+[Windows reader used by that run](examples/1b-battery-qualification/windows-reader-at-run.py.txt).
+The `.txt` suffix keeps them out of linting and imports. Subsequent source changes
 add validation guards, run identity and assessment statistics and were checked with fakes;
 they were not a second live battery run. The output directory's timestamp label is not
 the authoritative start time; use the manifest timestamps.
