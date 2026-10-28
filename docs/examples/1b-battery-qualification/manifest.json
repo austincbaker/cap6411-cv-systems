@@ -1,0 +1,66 @@
+{
+  "started_utc": "2026-10-28T02:16:08.505163+00:00",
+  "origin_monotonic_s": 202223.868035385,
+  "parameters": {
+    "output": "results/1b-battery-qualification-20261028T0217Z",
+    "idle_seconds": 120.0,
+    "load_seconds": 120.0,
+    "recovery_seconds": 30.0,
+    "interval": 10.0,
+    "workers": 4
+  },
+  "wsl_inventory": {
+    "record_version": 1,
+    "run_id": "98ea9adf6aae4670a228f5f265c558bf",
+    "origin_monotonic_s": 202223.868035385,
+    "platform": "Linux-6.6.87.1-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+    "wsl": true,
+    "sysfs_root": "/sys",
+    "sensors": [
+      {
+        "sensor_id": "battery:BAT1:energy_now",
+        "path": "/sys/class/power_supply/BAT1/energy_now",
+        "name": "BAT1",
+        "domain": "battery_stored_energy",
+        "quantity": "stored_energy",
+        "raw_unit": "uWh",
+        "unit": "J",
+        "scale": 0.0036,
+        "max_energy_range_j": null,
+        "parent_sensor_id": null,
+        "battery_path": "/sys/class/power_supply/BAT1",
+        "readable_at_discovery": true,
+        "discovery_error": null
+      },
+      {
+        "sensor_id": "battery:BAT1:power_now",
+        "path": "/sys/class/power_supply/BAT1/power_now",
+        "name": "BAT1",
+        "domain": "battery_flow",
+        "quantity": "power",
+        "raw_unit": "uW",
+        "unit": "W",
+        "scale": 1e-06,
+        "max_energy_range_j": null,
+        "parent_sensor_id": null,
+        "battery_path": "/sys/class/power_supply/BAT1",
+        "readable_at_discovery": true,
+        "discovery_error": null
+      }
+    ],
+    "warnings": [
+      "no powercap energy counters found; CPU/package energy is unavailable",
+      "WSL telemetry requires physical-host validation before energy claims"
+    ]
+  },
+  "completed": true,
+  "events": [
+    {
+      "event": "cpu_load_started",
+      "elapsed_s": 120.0002464739955
+    }
+  ],
+  "script_sha256": "67dadf45e59d32f04362566527d3c2844b9f89233bf179d1a52430073547ff12",
+  "ended_utc": "2026-10-28T02:20:39.009441+00:00",
+  "duration_s": 270.6195508259989
+}

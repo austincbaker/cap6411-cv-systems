@@ -31,17 +31,19 @@
   The experiment platform is Ubuntu 22.04.5 LTS under WSL2 on the team
   laptop.
 - **Structure:** Planning documents live in `TODO_Plan/` and
-  `energy-aware-vlm-implementation/` (see "Planning documents" below). The
-  proposed code layout is `app/` (entry point, scene state), `src/capture/`,
-  `src/vlm/`, `src/gates/`, `src/energy/`, `src/evaluation/`, `experiments/`
-  (scoring, benchmark and analysis commands), `configs/`, `tests/` and
-  `tests/fixtures/`, `data/` and `docs/`. Treat a proposed path as real only
-  once it exists in the repository.
+  `energy-aware-vlm-implementation/` (see "Planning documents" below).
+  Implemented components are `src/vlm/`, `src/energy/`, `configs/`, `scripts/`,
+  `tests/` and `docs/`. Setuptools discovers packages under `src/`; imports
+  are `vlm` and `energy`, not `src.vlm` and `src.energy`. `app/`,
+  `src/capture/`, `src/gates/`, `src/evaluation/`, `experiments/`,
+  `tests/fixtures/` and `data/` remain proposed until their items are implemented.
 - **Key contracts:** `docs/data-contracts.md` (planned in item `2d`) is the
   authoritative file contract: versioned JSONL prediction and request logs, CSV
   annotations and power samples, and a JSON run manifest. Evaluation tools
   consume these files, not application internals. Keep source-frame time,
-  response-available time and the shared monotonic timeline distinct.
+  response-available time and the shared monotonic timeline distinct. Current
+  component records are provisional and documented in `README.md` and
+  `docs/methodology.md`; they do not replace item `2d`'s schema handoff.
 - **External code:** `.cache/llama.cpp/` is a gitignored upstream llama.cpp
   checkout. Do not edit it, and its own `AGENTS.md` does not apply to this
   project.
@@ -52,18 +54,27 @@ Run commands from the repository root unless stated otherwise. `README.md` is
 the single source for install and run steps; keep this section pointing at it
 rather than duplicating it once those steps exist.
 
-- **Prerequisites and installation:** TODO: no dependency manifest or install
-  procedure is committed yet; item `1a` adds and documents it. Pinned model,
-  runtime and dependency versions belong in that committed setup, not here.
-- **Run locally:** TODO: no application entry point exists yet; item `1d` adds
-  `app/main.py`, and the `llama-server` startup command comes from item `1a`.
-- **Build or package:** No build or packaging step is configured.
-- **Run a focused test:** TODO: no test setup exists yet. The planned form is
-  `python -m pytest tests/<file>.py`.
-- **Run the relevant test suite:** TODO: planned as `python -m pytest tests/`
-  once the test setup exists.
-- **Lint, format, and type-check:** No formatter, linter or type checker is
-  configured. Run `git diff --check` for whitespace errors.
+- **Prerequisites and installation:** Follow `README.md`; install Python
+  dependencies with `uv sync --extra dev`. `pyproject.toml` and `uv.lock`
+  define and lock dependencies. Pinned model/runtime settings belong in
+  `configs/inference.json`, not in this instruction file.
+- **Run locally:** See the README for `uv run python scripts/llama_runtime.py serve`,
+  `uv run vlm-smoke ...` and diagnostic `uv run energy-monitor ...`. The README also
+  documents `WindowsBatteryReader` and the owner-authorized unplugged
+  `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
+  qualified Windows battery source and WSL sysfs scale limitation. No webcam application
+  entry point exists yet; item `1d` adds `app/main.py`.
+- **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
+  the pinned CPU-only server and verifies model downloads; prerequisites and
+  artifact locations are documented in the README. Python package installation
+  is managed by `uv sync` using the setuptools configuration in `pyproject.toml`.
+- **Run a focused test:** After setup, run
+  `uv run python -m pytest tests/test_inference_client.py -q` or replace the
+  filename with the affected test module.
+- **Run the relevant test suite:** `uv run python -m pytest -q`.
+- **Lint, format, and type-check:** Run `uv run ruff check src scripts tests`,
+  `uv run ruff format --check src scripts tests` and `git diff --check`.
+  No static type checker is configured. Use `uv lock --check` after dependency changes.
 - **Required CI checks:** No CI configuration is present in this checkout.
 
 ## Planning documents
@@ -105,6 +116,10 @@ rather than duplicating it once those steps exist.
   package (RAPL) energy, so energy results are whole-laptop battery energy
   from runs on battery power, using the source qualified in item `1b`; report
   energy as unavailable when no source qualifies.
+- Results can vary across laptops. Record the laptop/configuration for every run,
+  requalify sensors on additional machines, and compare policies on the same laptop.
+  Keep results from different machines separate; the designated experiment-platform
+  requirement above still applies to project acceptance.
 - Write each run to a new output directory and never overwrite prior results.
   After the item `3h` evaluation freeze, a behavior change requires rerunning
   the affected experiments, and held-out data must not be used for tuning.

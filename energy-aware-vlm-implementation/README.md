@@ -88,7 +88,7 @@ A lean stub ends in `<!-- impl-notes-anchor -->`. Direct expansion replaces only
 
 The five independent items are `1a` (Austin: VLM), `1b` (Austin: telemetry), `1c` (Alejandro: capture), `1e` (James: pilot data) and `1f` (Shawn: methods). Item `1d` becomes ready after `1a`, `1b` and `1c` are implemented. Ubuntu is settled; model and sensor success must still be verified on the actual laptop.
 
-Austin confirmed these five items for direct expansion with `fill-plan-stubs`. They now contain detailed implementation notes; the other 22 remain lean and unchanged. No application code was implemented and every implementation status is still `⬜ Not started`. No new material planning questions surfaced. A repository `AGENTS.md` now exists (Revision 4); setup and test commands remain TODO until `1a`, which is still R09 in the master plan. See Revision 2 for the expansion record.
+Austin confirmed these five items for direct expansion with `fill-plan-stubs`; their detailed notes remain available. Items `1a` and `1b` now have implemented software; `1a` awaits owner review and `1b` has completed its unplugged source qualification (Revision 7). The other 22 stubs remain lean. `AGENTS.md`, the dependency lock and the test setup now supply repository guidance; see Revision 5 and the implementation handoff below.
 
 
 ## Live GitHub tracking
@@ -96,3 +96,12 @@ Austin confirmed these five items for direct expansion with `fill-plan-stubs`. T
 All 27 items are published in [the repository issue tracker](https://github.com/austincbaker/cap6411-cv-systems/issues), assigned to their planned owners and prioritized using `priority:P0` through `priority:P3`. Native blocked-by relationships mirror the 61 prerequisite edges (rev. 6) in the master plan. Five independent starting items have no blockers.
 
 P0 covers critical foundations/handoffs, P1 required delivery, P2 the inference ablation and P3 the optional viewer. Priority is separate from readiness and required scope. Local implementation statuses and completion matrices remain unchanged; publishing an issue does not mean its implementation has started.
+
+
+## First implementation handoff — 2026-10-27
+
+- `1a`: software and WSL2 platform smoke check implemented; owner review closes it. Setup is documented in the root `README.md`.
+- `1b`: local acceptance complete; native Windows battery reporting passed the unplugged check on 2026-10-27. Coarse updates require longer trials; see [qualification evidence](../docs/1b-battery-qualification.md). Code review/merge remains.
+- Evidence and limitations: [validation notes](../docs/validation-1a-1b.md).
+
+The code is in `src/vlm/`, `src/energy/` and `scripts/llama_runtime.py`. Dependencies are locked through `uv.lock`. Other application items remain not started. GitHub issues are still open for review; local implementation status does not imply source publication.

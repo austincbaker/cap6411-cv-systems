@@ -1,0 +1,66 @@
+{
+  "kind": "development-smoke-only-not-designated-laptop-acceptance",
+  "llama_cpp_revision": "620d2225cc436ab0b001e3200e590e3b286ef9ab",
+  "hf_revision": "ccd7aae53bcb1997355c2f094959e72b3642ce17",
+  "model": "SmolVLM2-500M-Video-Instruct-Q8_0",
+  "projector": "Q8_0",
+  "backend": "CPU-only",
+  "python": "3.11.9",
+  "platform": "Ubuntu 22.04.5 LTS / WSL2 6.6.87.1",
+  "cpu": "Intel Core i7-13620H",
+  "threads": 4,
+  "requests": 4,
+  "mean_latency_s": 2.4801471577520715,
+  "max_output_tokens": 32,
+  "observed_output_tokens": [
+    24,
+    18,
+    24,
+    18
+  ],
+  "observed_cached_tokens": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "server_pid_verified_alive_after_all_requests": true,
+  "stopped_server_failure": "connection_error; one attempted request; no retry",
+  "images": [
+    {
+      "filename": "cats.jpg",
+      "url": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000039769.jpg",
+      "sha256": "dea9e7ef97386345f7cff32f9055da4982da5471c48d575146c796ab4563b04e",
+      "bytes": 173131
+    },
+    {
+      "filename": "room.jpg",
+      "url": "https://s3.amazonaws.com/images.cocodataset.org/val2017/000000000139.jpg",
+      "sha256": "ffe0f0cec3b2e27aab1967229cdf0a0d7751dcdd5800322f0b8ac0dffb3b8a8d",
+      "bytes": 161811
+    }
+  ],
+  "telemetry": {
+    "idle_duration_s": 10,
+    "idle_rows": 22,
+    "inference_duration_s": 30,
+    "inference_rows": 62,
+    "cpu_energy_available": false,
+    "qualified_battery_consumption_available": false,
+    "limitation": "WSL2; AC online; battery not discharging; stored energy unchanged",
+    "idle_condition": "loaded model, no requests after health check",
+    "inference_condition": "30-second window containing the four-image sequence"
+  },
+  "observed_server": {
+    "build_info": "b1-620d222",
+    "model_alias": "smolvlm2-500m-q8",
+    "modalities": {
+      "vision": true,
+      "video": true,
+      "audio": false
+    },
+    "total_slots": 1
+  },
+  "vlm_run_id": "84caab59a59a426f884e407f78ab6c51",
+  "designated_laptop_validation": false
+}

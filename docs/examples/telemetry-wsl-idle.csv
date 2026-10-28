@@ -1,0 +1,23 @@
+run_id,sensor_id,elapsed_s,domain,quantity,raw_value,raw_unit,value,unit,valid,error,max_energy_range_j,battery_status,ac_online,quality_flags
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,0.003698468004586175,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,0.003698468004586175,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,1.0037715869839303,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,1.0037715869839303,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,2.003752502001589,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,2.003752502001589,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,3.0037070249964017,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,3.0037070249964017,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,4.00382701199851,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,4.00382701199851,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,5.003820359997917,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,5.003820359997917,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,6.003744918009033,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,6.003744918009033,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,7.00375981599791,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,7.00375981599791,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,8.003842650010483,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,8.003842650010483,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,9.003889170009643,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,9.003889170009643,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:energy_now,10.003983280999819,battery_stored_energy,stored_energy,4700000,uWh,16920.0,J,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging
+523aa0fdd6524825a1a399979cc317bd,battery:BAT1:power_now,10.003983280999819,battery_flow,power,0,uW,0.0,W,True,,,Not charging,True,wsl_host_validation_required;not_verified_discharging

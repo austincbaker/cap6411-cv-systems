@@ -1,0 +1,34 @@
+{
+  "decision": "go",
+  "reasons": [],
+  "qualified_source": "Windows.Devices.Power.BatteryReport",
+  "scope": "whole-laptop reported battery energy; includes Windows and background work",
+  "raw_energy_unit": "mWh",
+  "joules_per_raw_unit": 3.6,
+  "samples": 28,
+  "valid_native_samples": 28,
+  "distinct_remaining_capacity_values": 9,
+  "first_remaining_mwh": 31874,
+  "last_remaining_mwh": 28785,
+  "energy_drop_wh": 3.089,
+  "native_full_capacity_mwh": 38646,
+  "phases": {
+    "idle": {
+      "samples": 12,
+      "reported_discharge_power_median_w": 41.177
+    },
+    "cpu_load": {
+      "samples": 12,
+      "reported_discharge_power_median_w": 37.403
+    },
+    "recovery": {
+      "samples": 4,
+      "reported_discharge_power_median_w": 37.631
+    }
+  },
+  "limitations": [
+    "Battery-controller estimates, not an external meter",
+    "Sampling includes PowerShell query overhead",
+    "Short qualification run, not a VLM-policy energy comparison"
+  ]
+}

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "always-on-vlm"
+version = "0.1.0"
+description = "Local VLM inference and Linux energy telemetry for the CAP6411 project"
+requires-python = ">=3.10"
+dependencies = ["httpx==0.28.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3,<9", "ruff>=0.11,<0.12"]
+
+[project.scripts]
+vlm-smoke = "vlm.smoke:main"
+energy-monitor = "energy.monitor:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

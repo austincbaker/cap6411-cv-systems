@@ -21,7 +21,7 @@ Ubuntu 22.04.5 LTS is confirmed. Independent discovery/build items 1a, 1b, 1c, 1
 
 ## Planning readiness
 
-Austin confirmed direct expansion of `1a`, `1b`, `1c`, `1e` and `1f`; their item files now contain detailed implementation notes. All implementation tasks remain not started. Item `1d` stays lean until its runtime dependencies are implemented. A repository `AGENTS.md` now exists; the absence of a committed dependency/test setup remains the master plan's R09 risk.
+Austin confirmed direct expansion of `1a`, `1b`, `1c`, `1e` and `1f`; their item files now contain detailed implementation notes. Both `1a` and `1b` software components are implemented; `1a` awaits owner review and `1b` has completed its unplugged source qualification (Revision 7). Items `1c`, `1e` and `1f` remain not started. Item `1d` stays lean until its runtime dependencies are implemented. The new `AGENTS.md` and implemented dependency/test setup now supply guidance; Revisions 5 and 6 record the remaining checks.
 
 ## Exit criteria
 
