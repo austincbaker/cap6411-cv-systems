@@ -1,0 +1,148 @@
+"""Read the Windows host's aggregate battery report from WSL, without admin rights."""
+
+from __future__ import annotations
+
+import json
+import math
+import shutil
+import subprocess
+import time
+from dataclasses import asdict, dataclass
+from typing import Any, Callable
+
+POWERSHELL_REPORT = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$battery = [Windows.Devices.Power.Battery,Windows.Devices.Power,ContentType=WindowsRuntime]::AggregateBattery
+$report = $battery.GetReport()
+$supply = [Windows.System.Power.PowerManager,Windows.System.Power,ContentType=WindowsRuntime]::PowerSupplyStatus
+[ordered]@{
+ observed_utc=[DateTime]::UtcNow.ToString('o')
+ remaining_mwh=$report.RemainingCapacityInMilliwattHours
+ full_mwh=$report.FullChargeCapacityInMilliwattHours
+ design_mwh=$report.DesignCapacityInMilliwattHours
+ charge_rate_mw=$report.ChargeRateInMilliwatts
+ status=$report.Status.ToString()
+ power_supply_status=$supply.ToString()
+} | ConvertTo-Json -Compress
+"""
+
+
+@dataclass(frozen=True)
+class WindowsBatteryReading:
+    source: str
+    started_s: float
+    available_s: float
+    observed_utc: str | None
+    remaining_mwh: int | None
+    full_mwh: int | None
+    charge_rate_mw: int | None
+    energy_j: float | None
+    discharge_power_w: float | None
+    battery_status: str | None
+    power_supply_status: str | None
+    ac_online: bool | None
+    valid: bool
+    error: str | None
+
+    @property
+    def on_battery(self) -> bool:
+        return self.valid and self.ac_online is False and self.battery_status == "Discharging"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def parse_report(report: Any, started_s: float, available_s: float) -> WindowsBatteryReading:
+    """Keep unknown native values missing; never reinterpret a percentage as mWh."""
+    if not isinstance(report, dict):
+        raise ValueError("Windows battery report must be an object")
+
+    def capacity(name: str) -> int | None:
+        value = report.get(name)
+        return value if type(value) is int and 0 <= value < 0xFFFFFFFF else None
+
+    remaining, full = capacity("remaining_mwh"), capacity("full_mwh")
+    rate = report.get("charge_rate_mw")
+    if type(rate) is not int or rate in {-0x80000000, 0xFFFFFFFF}:
+        rate = None
+    status = report.get("status")
+    status = status if isinstance(status, str) else None
+    supply = report.get("power_supply_status")
+    supply = supply if isinstance(supply, str) else None
+    ac_online = {"NotPresent": False, "Adequate": True, "Inadequate": True}.get(supply)
+    valid = remaining is not None and full is not None and full > 0 and remaining <= full
+    return WindowsBatteryReading(
+        source="Windows.Devices.Power.BatteryReport",
+        started_s=started_s,
+        available_s=available_s,
+        observed_utc=report.get("observed_utc"),
+        remaining_mwh=remaining,
+        full_mwh=full,
+        charge_rate_mw=rate,
+        energy_j=remaining * 3.6 if remaining is not None else None,
+        # Windows uses negative charge rate for discharge. Preserve the raw sign too.
+        discharge_power_w=-rate / 1000 if rate is not None else None,
+        battery_status=status,
+        power_supply_status=supply,
+        ac_online=ac_online,
+        valid=valid,
+        error=None if valid else "missing_or_invalid_energy_capacity",
+    )
+
+
+class WindowsBatteryReader:
+    def __init__(
+        self,
+        *,
+        executable: str | None = None,
+        timeout_s: float = 15,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.executable = executable or shutil.which("powershell.exe")
+        if isinstance(timeout_s, bool) or not math.isfinite(timeout_s) or timeout_s <= 0:
+            raise ValueError("timeout_s must be finite and positive")
+        self.timeout_s = timeout_s
+        self.clock = clock
+
+    def read(self) -> WindowsBatteryReading:
+        started = self.clock()
+        if not self.executable:
+            error = "powershell_unavailable"
+        else:
+            try:
+                result = subprocess.run(
+                    [
+                        self.executable,
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-Command",
+                        POWERSHELL_REPORT,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    timeout=self.timeout_s,
+                    check=True,
+                )
+                return parse_report(
+                    json.loads(result.stdout.lstrip("\ufeff")), started, self.clock()
+                )
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                error = type(exc).__name__
+        return WindowsBatteryReading(
+            "Windows.Devices.Power.BatteryReport",
+            started,
+            self.clock(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            False,
+            error,
+        )

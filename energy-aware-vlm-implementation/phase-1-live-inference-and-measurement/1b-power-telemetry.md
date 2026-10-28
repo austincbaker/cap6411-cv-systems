@@ -5,8 +5,8 @@
 **GitHub blocked by:** None
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: 🟡 In progress
-**Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D08, D11; R03, R08
+**Status**: 🟢 Complete (local acceptance evidence; issue open for review)
+**Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D08, D11, D12; R03, R08
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md)
 
@@ -16,29 +16,33 @@ Owner: Austin, with Shawn reviewing measurement validity. Capture timestamped po
 
 ## Tasks
 
-- [ ] Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements.
+- [x] Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements.
 - [x] Implement sample collection with timestamps, validity and lifecycle cleanup.
 - [x] Provide a short trace and document missing samples and counter behavior for Shawn.
 
 ## Files to be touched
 
-- `src/energy/monitor.py` — Proposed telemetry adapter.
+- `src/energy/monitor.py` — Sysfs diagnostic adapter.
+- `src/energy/windows.py` — Qualified native Windows battery reader.
+- `scripts/qualify_battery.py` — Bounded unplugged qualification and raw recording.
+- `tests/test_windows_battery.py` — Fake native-reader and decision checks.
+- `docs/1b-battery-qualification.md` — Dated source decision and raw evidence.
 - `docs/methodology.md` — Sensor limitations and units, coordinated with Shawn.
 
 ## Source references (if porting)
 
-Not a port. The existing repository contains a placeholder `README.md` and a Python-oriented `.gitignore`; all implementation paths above are proposed. Use the master plan's supplied research references where relevant and verify technical claims during implementation.
+Not a port. The implemented source paths are listed above. Unit and state references are linked in `docs/1b-battery-qualification.md`; verify hardware support on each experiment machine.
 
 ## Open questions
 
-- [ ] Verify the actual sensor permissions, availability and domain on the selected primary laptop before final trials.
-- [ ] **Go/no-go by 2026-11-01 (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters. Test, on battery power, whether the WSL battery passthrough or Windows battery reporting yields updating whole-laptop discharge readings, and name the qualified source. If neither qualifies, record that measured-energy claims are unavailable and notify the team before `2f`.
+- [x] Verify the actual sensor permissions, availability and domain on the selected primary laptop before final trials.
+- [x] **Go/no-go by 2026-11-01 (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters. Test, on battery power, whether the WSL battery passthrough or Windows battery reporting yields updating whole-laptop discharge readings, and name the qualified source. If neither qualifies, record that measured-energy claims are unavailable and notify the team before `2f`.
 
 ## Acceptance criteria
 
 - [x] A short run records a declared power/energy domain and units.
 - [x] Unsupported sensors or gaps are recorded as unavailable instead of zero consumption.
-- [ ] A dated go/no-go names the qualified whole-laptop energy source, or records that measured energy is unavailable; every trace records AC and battery state.
+- [x] A dated go/no-go names the qualified whole-laptop energy source, or records that measured energy is unavailable; every trace records AC and battery state.
 
 ## Definition of Done
 
@@ -46,16 +50,16 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements. | [Tasks](#tasks) | The chosen sensor returns interpretable samples, or an unavailable sensor is explicitly reported. | src/energy/monitor.py:78, docs/validation-1a-1b.md:37 | 🟡 |
+| 1 | Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements. | [Tasks](#tasks) | The chosen sensor returns interpretable samples, or an unavailable sensor is explicitly reported. | src/energy/windows.py:56, docs/1b-battery-qualification.md:3 | 🟢 |
 | 2 | Implement sample collection with timestamps, validity and lifecycle cleanup. | [Tasks](#tasks) | A finite run produces a trace aligned with its measured start/end interval. | src/energy/monitor.py:188, src/energy/monitor.py:314, tests/test_energy_monitor.py:147 | 🟢 |
-| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | Shawn can explain the energy domain and calculate a check value from the trace. | docs/examples/telemetry-wsl-idle.csv:1, docs/examples/telemetry-wsl-inference.csv:1, docs/methodology.md:91 | 🟢 |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/validation-1a-1b.md:37, tests/test_energy_monitor.py:163 | 🟢 |
+| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | Shawn can explain the energy domain and calculate a check value from the trace. | docs/examples/1b-battery-qualification/samples.jsonl:1, docs/1b-battery-qualification.md:17 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/1b-battery-qualification.md:3, tests/test_windows_battery.py:102 | 🟢 |
 
 ## Implementation notes
 
 ### Context and boundaries
 
-Austin owns collection; Shawn reviews measurement validity. Apply D08 (declared energy domains and total/incremental separation), D11 (Ubuntu 22.04.5 LTS), R03 (hardware support) and R08 (measurement noise). No sensor adapter exists in the repository. The laptop's CPU vendor, kernel, accessible energy counters and battery properties have not been verified.
+Austin owns collection; Shawn reviews measurement validity. Apply D08 (declared energy domains and total/incremental separation), D11 (Ubuntu 22.04.5 LTS), R03 (hardware support) and R08 (measurement noise). The initial planning notes below are retained as the implementation checklist. Hardware findings and selected source are recorded in the execution records and qualification report.
 
 Ubuntu selection authorizes a Linux implementation path; it does not establish that RAPL or battery telemetry is present. This item collects evidence and a usable trace. The final analysis and energy controller remain Shawn's item 3g and Austin's item 3a.
 
@@ -94,9 +98,24 @@ A readable trace on the actual Ubuntu laptop establishes the positive collection
 - `docs/methodology.md` — sensor names/domains, units, coverage, selected cadence and limitations; Shawn owns the surrounding protocol.
 - `tests/test_energy_monitor.py` — proposed fake-sensor checks; no privileged hardware or live battery required in automated tests.
 
-The original open check remains pending until hardware is inspected. Sensor choice is evidence-led within the existing plan; do not add macOS/Windows backends or unrequested monitoring infrastructure.
+The original hardware check is resolved by the unplugged execution record below. D12 authorizes the Windows battery reporting path qualified here; no other platform backend is implied.
 
 
-## Execution record — 2026-10-27
+## Initial execution record — 2026-10-27
 
 The collection software, fake-sensor tests and short raw traces are implemented. This Ubuntu instance is WSL2: powercap counters are absent and the exposed battery is not discharging. The raw battery samples carry explicit quality flags and cannot establish physical energy consumption. Task/row 1 and the hardware-validation question remain open until the unplugged go/no-go (due 2026-11-01) qualifies a whole-laptop battery source. No energy-savings claim is made. See `docs/validation-1a-1b.md` and `docs/methodology.md`. GitHub issue #2 remains open.
+
+## Unplugged qualification record — 2026-10-27 (Revision 7)
+
+**GO:** `Windows.Devices.Power.BatteryReport` remaining capacity, accessed from WSL2
+through Windows PowerShell, is selected for longer-window whole-laptop battery energy.
+All 28 samples were valid, discharging and AC off. Reported energy fell 3.089 Wh over
+approximately 270 seconds. WSL sysfs absolute values remain unqualified: its 5 Wh full
+capacity differs from native 38.646 Wh. CPU/package energy is unavailable.
+
+Native readings updated roughly every 30–40 seconds with a median 0.387 Wh step;
+per-call energy and load effects are not established. The source check closes the
+2026-11-01 D12 go/no-go. See `docs/1b-battery-qualification.md` and its raw evidence.
+76 fake-based tests and Ruff checks passed. Shared run schemas and long-run protocols
+remain items 2d and 2f; Shawn's review is the consumer handoff, not claimed completed here.
+Issue #2 stays open for code review and merge; source qualification is complete.

@@ -98,13 +98,32 @@ settings. It produces `samples.csv` and `manifest.json` with raw values, declare
 normalized joules/watts, sensor domains, counter ranges, actual sampling times and error
 or quality flags. Missing values are blank CSV cells, never fabricated zeros.
 
-**This workspace is WSL2.** It exposes battery attributes but no powercap/RAPL counters.
-The battery was plugged in, reported zero power flow and stayed at a fixed stored-energy
-value. Those observations are saved with `wsl_host_validation_required` and
-`not_verified_discharging` flags. They establish collector behavior, not laptop energy
-consumption, CPU energy or energy savings. Before the project's energy experiments, the `1b`
-go/no-go must qualify a whole-laptop battery source on battery power, using the WSL
-passthrough or Windows battery reporting.
+**This workspace is WSL2.** No powercap/RAPL counters are exposed. The default
+`energy-monitor` sysfs output is diagnostic: the unplugged check found an unqualified
+absolute battery scale. Use Windows host battery reporting for energy experiments.
+The [dated 1b qualification](docs/1b-battery-qualification.md) records the GO decision,
+raw evidence, coarse 30–40 second updates and experiment limitations.
+
+The native reader needs Windows PowerShell interop (`powershell.exe` on PATH), without
+admin access. One read preserves raw mWh, normalized joules, timing and AC/battery state:
+
+```python
+from energy.windows import WindowsBatteryReader
+reading = WindowsBatteryReader().read()
+# Accept energy only when reading.on_battery and the complete run is valid.
+print(reading.to_dict())
+```
+
+To repeat the owner-authorized unplugged qualification, which includes a bounded CPU load:
+
+```bash
+uv run python scripts/qualify_battery.py --output results/battery-qualification-new \
+  --idle-seconds 120 --load-seconds 120 --recovery-seconds 30 --interval 10 --workers 4
+```
+
+This creates `samples.jsonl`, `manifest.json` and `qualification.json`. It records native
+battery readings alongside WSL diagnostics and aborts on invalid readings, AC connection
+or battery below 20%. Application-wide run integration remains item 2d.
 
 `completed` means recording completed; `valid` means a reading parsed successfully.
 Neither overrides a measurement's domain or quality flags. In particular, battery flow

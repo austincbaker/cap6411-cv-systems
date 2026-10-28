@@ -59,7 +59,10 @@ rather than duplicating it once those steps exist.
   define and lock dependencies. Pinned model/runtime settings belong in
   `configs/inference.json`, not in this instruction file.
 - **Run locally:** See the README for `uv run python scripts/llama_runtime.py serve`,
-  `uv run vlm-smoke ...` and `uv run energy-monitor ...`. No webcam application
+  `uv run vlm-smoke ...` and diagnostic `uv run energy-monitor ...`. The README also
+  documents `WindowsBatteryReader` and the owner-authorized unplugged
+  `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
+  qualified Windows battery source and WSL sysfs scale limitation. No webcam application
   entry point exists yet; item `1d` adds `app/main.py`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
@@ -113,6 +116,10 @@ rather than duplicating it once those steps exist.
   package (RAPL) energy, so energy results are whole-laptop battery energy
   from runs on battery power, using the source qualified in item `1b`; report
   energy as unavailable when no source qualifies.
+- Results can vary across laptops. Record the laptop/configuration for every run,
+  requalify sensors on additional machines, and compare policies on the same laptop.
+  Keep results from different machines separate; the designated experiment-platform
+  requirement above still applies to project acceptance.
 - Write each run to a new output directory and never overwrite prior results.
   After the item `3h` evaluation freeze, a behavior change requires rerunning
   the affected experiments, and held-out data must not be used for tuning.

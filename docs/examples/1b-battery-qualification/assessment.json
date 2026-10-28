@@ -1,0 +1,38 @@
+{
+  "decision": "go",
+  "reasons": [],
+  "qualified_source": "Windows.Devices.Power.BatteryReport",
+  "scope": "whole-laptop reported battery energy; includes Windows and background work",
+  "raw_energy_unit": "mWh",
+  "joules_per_raw_unit": 3.6,
+  "samples": 28,
+  "valid_native_samples": 28,
+  "distinct_remaining_capacity_values": 9,
+  "first_remaining_mwh": 31874,
+  "last_remaining_mwh": 28785,
+  "energy_drop_wh": 3.089,
+  "native_full_capacity_mwh": 38646,
+  "observed_capacity_step_median_wh": 0.387,
+  "observed_update_interval_median_s": 39.03805935799028,
+  "observed_update_interval_max_s": 39.87524970099912,
+  "phases": {
+    "idle": {
+      "samples": 12,
+      "reported_discharge_power_median_w": 41.177
+    },
+    "cpu_load": {
+      "samples": 12,
+      "reported_discharge_power_median_w": 37.403
+    },
+    "recovery": {
+      "samples": 4,
+      "reported_discharge_power_median_w": 37.631
+    }
+  },
+  "limitations": [
+    "Battery-controller estimates, not an external meter",
+    "Sampling includes PowerShell query overhead",
+    "Short qualification run, not a VLM-policy energy comparison"
+  ],
+  "provenance": "Post-run assessment of unchanged samples.jsonl; original qualification.json retained. The executed script snapshot remains in the local results directory."
+}

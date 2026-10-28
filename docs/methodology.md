@@ -84,10 +84,40 @@ The powercap directory contained no counters. `BAT1` exposed `energy_now=4700000
 Both WSL and discharge-quality flags are therefore significant. These traces cannot
 establish processor energy, whole-laptop draw or savings.
 
-Before the final energy study, qualify a whole-laptop battery source on battery power
-through the `1b` go/no-go (WSL battery passthrough or Windows battery reporting), confirm
-its domain and update rate, and validate discharge. Package (RAPL) energy is unavailable
-under WSL2. Do not change power limits or loosen system permissions silently.
+The unplugged follow-up completed the `1b` go/no-go on 2026-10-27: **GO for Windows
+host `Windows.Devices.Power.BatteryReport` capacity**, read through PowerShell from WSL.
+See the [qualification report and raw evidence](1b-battery-qualification.md).
+The WSL full-capacity scale was 5 Wh versus native 38.646 Wh, so its absolute energy
+and power remain unqualified even while discharging. Package energy remains unavailable.
+
+The native reader in `src/energy/windows.py` retains raw remaining/full mWh and signed
+charge-rate mW. Remaining mWh × 3.6 gives stored joules; negative charge rate represents
+discharge. A qualified discharge sample requires valid capacity, AC disconnected and
+status `Discharging`. Missing values and errors remain explicit. Microsoft's
+[BatteryReport documentation](https://learn.microsoft.com/en-us/uwp/api/windows.devices.power.batteryreport?view=winrt-26100)
+defines the native units.
+
+`scripts/qualify_battery.py` creates native/WSL `samples.jsonl`, a manifest and a decision
+report; the existing `energy-monitor` CSV remains a separate diagnostic path. Native
+readings preserve host monotonic query start/availability and observation UTC. Polling
+starts a PowerShell process each time, so keep that overhead/cadence matched across
+policies. Observations updated only about every 30–40 seconds, with median capacity step
+0.387 Wh. Use longer windows spanning many steps and repeat trials; this source cannot
+resolve a single inference's energy. Use start/end remaining-capacity differences for
+whole-laptop battery energy, keeping reported instantaneous power as a separate quantity.
+
+The 270-second check returned 28 valid unplugged samples and a reported 3.089 Wh drop.
+Reported median load-phase power was lower than idle, so no workload effect or savings
+is established. Background activity and Windows are part of the measurement domain.
+Final trial duration, precision criteria and experimental controls remain Shawn's 2f
+protocol. A finer WMI path was only briefly probed and is not qualified by this run.
+Do not change power limits or loosen system permissions silently.
+
+Results may vary depending on whose laptop runs the tests. Hardware, battery health,
+power settings, background activity and sensor update rates can affect energy and
+latency. Record the laptop/configuration for each run and compare policies on the same
+machine. Qualify the battery source on each additional laptop and report its results
+separately; this laptop's qualification and cost estimates do not transfer automatically.
 
 ## Arithmetic check for Shawn
 
