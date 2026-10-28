@@ -8,17 +8,18 @@
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D01, D07; R07
 **Depends on**: [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md)
-**Blocks**: [3d](../phase-3-budget-control-and-evaluation-tools/3d-event-matching.md)
+**Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
 ## Scope
 
-Owner: James. Finish the custom dataset and grouped splits, adding a public subset only where event labels can be mapped honestly. Provide manual expected event outcomes that will become reference cases for the scoring implementation.
+Owner: James. Finish the custom dataset and grouped splits, adding a public subset only where event labels can be mapped honestly. Provide manual expected event outcomes that will become reference cases for the scoring implementation. Recording under the `1e` protocol may start before `2d`; only the final annotation files wait on the contract. The full dataset is required by `3h`, not by `3d` (rev. 6).
 
 ## Tasks
 
 - [ ] Complete roughly 30–36 short clips and at least 100 events where feasible, plus longer idle/mixed recordings.
 - [ ] Annotate observable intervals and group development/validation/test by session or environment.
 - [ ] Double-check a subset with another member and create hand-scored matching examples.
+- [ ] Draft the blinded description-review protocol: rater count, blinding and assignment, sample selection and rubric.
 
 ## Files to be touched
 
@@ -48,6 +49,7 @@ The stub is considered complete when every row below shows 🟢.
 | 1 | Complete roughly 30–36 short clips and at least 100 events where feasible, plus longer idle/mixed recordings. | [Tasks](#tasks) | The inventory records actual clip/event counts and difficulty coverage. | — | ⬜ |
 | 2 | Annotate observable intervals and group development/validation/test by session or environment. | [Tasks](#tasks) | Adjacent frames or near-duplicate sessions do not leak across splits. | — | ⬜ |
 | 3 | Double-check a subset with another member and create hand-scored matching examples. | [Tasks](#tasks) | Disagreements are resolved and reference outcomes are recorded before implementation. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 4 | Draft the blinded description-review protocol: rater count, blinding and assignment, sample selection and rubric. | [Tasks](#tasks) | The protocol is written before held-out outputs exist; `3h` freezes it. | — | ⬜ |
+| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
 
 <!-- impl-notes-anchor -->

@@ -12,11 +12,11 @@
 
 ## Scope
 
-Owner: Austin, with Shawn validating the accounting. Calibrate inference costs and enforce a feasible incremental energy allowance above measured idle. Account for continuous gate overhead and make priority exceptions visible.
+Owner: Austin, with Shawn validating the accounting. Build the calibration procedure and enforce a feasible incremental energy allowance above measured idle. Controller logic is developed and tested against fixture costs; live per-mode and gate-overhead calibration runs in `3c` once the gate and application exist (rev. 6). Account for continuous gate overhead and make priority exceptions visible.
 
 ## Tasks
 
-- [ ] Measure per-mode call and continuous gate costs against a stated idle condition.
+- [ ] Implement the calibration procedure and cost inputs for per-mode calls and continuous gate overhead, validated against fixture costs.
 - [ ] Implement allowance accumulation, cost admission and actual-cost reconciliation.
 - [ ] Record infeasible budgets, priority overrides and resulting budget deviation.
 
@@ -45,7 +45,7 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Measure per-mode call and continuous gate costs against a stated idle condition. | [Tasks](#tasks) | Estimated costs have recorded calibration data and sensor domains. | — | ⬜ |
+| 1 | Implement the calibration procedure and cost inputs for per-mode calls and continuous gate overhead, validated against fixture costs. | [Tasks](#tasks) | The procedure accepts measured or fixture costs with their sensor domain; live values come from `3c`. | — | ⬜ |
 | 2 | Implement allowance accumulation, cost admission and actual-cost reconciliation. | [Tasks](#tasks) | Known costs and time increments produce predictable admit/skip decisions. | — | ⬜ |
 | 3 | Record infeasible budgets, priority overrides and resulting budget deviation. | [Tasks](#tasks) | Overspend and unavailable accounting cannot masquerade as adherence. | — | ⬜ |
 | 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |

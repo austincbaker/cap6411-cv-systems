@@ -8,7 +8,7 @@
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-4--complete-experiments-report-and-demonstration-week-4); D08, D11; R03, R06, R08
 **Depends on**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
-**Blocks**: [4d](../phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md), [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md), [4f](../phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md)
+**Blocks**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4d](../phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md), [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md), [4f](../phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md)
 
 ## Scope
 
@@ -18,7 +18,7 @@ Owner: Shawn. Execute the final repeated energy comparison and generate exportab
 
 - [ ] Run three repeated measurements per main configuration using the frozen protocol.
 - [ ] Review coverage, failures and environmental changes before aggregation.
-- [ ] Generate final energy-quality tables, latency distributions and uncertainty summaries.
+- [ ] Generate final energy tables, latency distributions and uncertainty summaries; `4d` publishes the combined energy-quality results.
 
 ## Files to be touched
 
@@ -46,7 +46,7 @@ The stub is considered complete when every row below shows 🟢.
 |---|---|---|---|---|---|
 | 1 | Run three repeated measurements per main configuration using the frozen protocol. | [Tasks](#tasks) | Completed trials have distinct manifests and declared measurement durations. | — | ⬜ |
 | 2 | Review coverage, failures and environmental changes before aggregation. | [Tasks](#tasks) | Excluded/incomplete runs retain explicit reasons and raw evidence. | — | ⬜ |
-| 3 | Generate final energy-quality tables, latency distributions and uncertainty summaries. | [Tasks](#tasks) | Each plotted point or table row links back to its constituent trials. | — | ⬜ |
+| 3 | Generate final energy tables, latency distributions and uncertainty summaries; `4d` publishes the combined energy-quality results. | [Tasks](#tasks) | Each plotted point or table row links back to its constituent trials. | — | ⬜ |
 | 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
 
 <!-- impl-notes-anchor -->

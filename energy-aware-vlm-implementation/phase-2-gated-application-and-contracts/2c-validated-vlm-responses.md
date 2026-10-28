@@ -8,7 +8,7 @@
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D01, D03, D06, D07; R05
 **Depends on**: [1a](../phase-1-live-inference-and-measurement/1a-local-vlm-inference.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md)
-**Blocks**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md)
+**Blocks**: [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md)
 
 ## Scope
 
@@ -16,7 +16,7 @@ Owner: Austin. Constrain prompts and validate model responses against the select
 
 ## Tasks
 
-- [ ] Define bounded prompts and a response shape aligned with James's event definitions.
+- [ ] Define bounded prompts and a structured per-frame observation (for example, a visible-object list) aligned with James's event definitions.
 - [ ] Validate parsed output, preserve original request status and distinguish observations from inferred state changes.
 - [ ] Emit source-frame and response-available timestamps plus supported token/cache statistics.
 
@@ -24,6 +24,7 @@ Owner: Austin. Constrain prompts and validate model responses against the select
 
 - `src/vlm/prompts.py` — Proposed prompts and response validation.
 - `src/vlm/client.py` — Inference status, timing and available statistics.
+- `tests/test_prompts.py` — Prompt construction, valid parsing, malformed and partial responses, and out-of-vocabulary labels.
 
 ## Source references (if porting)
 
@@ -44,7 +45,7 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Define bounded prompts and a response shape aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | — | ⬜ |
+| 1 | Define bounded prompts and a structured per-frame observation (for example, a visible-object list) aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | — | ⬜ |
 | 2 | Validate parsed output, preserve original request status and distinguish observations from inferred state changes. | [Tasks](#tasks) | Malformed text does not silently become a correct event. | — | ⬜ |
 | 3 | Emit source-frame and response-available timestamps plus supported token/cache statistics. | [Tasks](#tasks) | Unavailable counts remain missing and successful responses carry both timestamps. | — | ⬜ |
 | 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |

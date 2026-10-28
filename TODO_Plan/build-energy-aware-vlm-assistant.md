@@ -24,7 +24,7 @@ The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [F
 
 **Assumption:** Workspace awareness with object addition/removal is the default application because the events can be staged and annotated using a fixed webcam. Simulated lab-safety monitoring and assistive object tracking remain candidate task definitions; implementing all three applications is outside the four-week scope.
 
-**Platform confirmed by Austin (rev. 1):** Ubuntu 22.04.5 LTS is the primary experiment platform. Keep the settled CPU-first baseline; integrated graphics, if tested, remain a separate configuration. The CPU vendor, exposed energy counters, battery telemetry and sensor permissions still require a hardware check in item `1b`.
+**Platform confirmed by Austin (rev. 1, refined rev. 6):** Ubuntu 22.04.5 LTS running under WSL2 on the team laptop is the primary experiment platform. Keep the settled CPU-first baseline; integrated graphics, if tested, remain a separate configuration. WSL2 exposes no powercap/RAPL counters, so package energy is unavailable; whole-laptop battery energy, measured unplugged, is the only candidate domain and requires the `1b` go/no-go.
 
 **Implementation-time checks retained for Week 1:** Finalize the event vocabulary using the default workspace task, verify a supported and sufficiently responsive model, check the actual laptop/sensors, and confirm public clip access and fit. These are assigned discovery tasks, not assumptions that their outcomes are already known.
 
@@ -85,7 +85,10 @@ The original Design choices remain settled. Stable identifiers below let item pl
 | D08 | Energy comparison | Idle, fixed, matched invocation, gate and budget modes; repeated main trials | Same; keep sensor domains and total/incremental energy separate | — |
 | D09 | Optimizations | Measure output/image/cache effects; no assumed visual-token saving | Same; unsupported controls remain unavailable | — |
 | D10 | Delivery scope | Four weeks; optional learned gate/viewer; no new VLM training | Same; 26 required items and one optional viewer | — |
-| D11 | Primary platform | Laptop/OS open | Ubuntu 22.04.5 LTS, confirmed by Austin; sensor verification remains in `1b` | new decision |
+| D11 | Primary platform | Laptop/OS open | Ubuntu 22.04.5 LTS under WSL2 on the team laptop (rev. 6); results produced there count as experiment evidence | new decision; WSL2 rev. 6 |
+| D12 | Energy measurement | Sensor open | Whole-laptop battery energy on unplugged runs, from the WSL battery passthrough or Windows battery reporting that `1b` qualifies by 2026-11-01; per-mode costs calibrated from long runs; package energy unavailable | new decision, rev. 6 |
+| D13 | Event derivation | Unassigned | `2b` normalizes validated per-frame observations and differences them against confirmed state; every policy shares it and `2d` documents it | new decision, rev. 6 |
+| D14 | Evaluation freeze | Freezes in `2d`, `2f` and `3h` | `2d`/`2f` produce version-1 contracts and templates; `3h` is the only evaluation freeze | new decision, rev. 6 |
 
 **Document authority:** `TODO_Plan/build-energy-aware-vlm-assistant.md` is the canonical master plan. `energy-aware-vlm-implementation/plan.md` is its synchronized reading copy, with local links adjusted for that directory. Future decisions must update the canonical plan and refresh the reading copy together; no separate decisions file is used.
 
@@ -103,6 +106,19 @@ All 27 work items now have corresponding live issues in [austincbaker/cap6411-cv
 | `priority:P3` | Optional stretch work | `4g` |
 
 Priority does not remove dependencies or change the required scope: `3b` remains required by the plan even though it is ranked P2. P0 describes task impact and coordination needs, not the importance of a team member's contribution. Shared issues keep the existing joint owners; the pilot (`3h`) and demonstration (`4f`) are assigned to all four members.
+
+### Schedule and milestones (rev. 6)
+
+Pencils down is **2026-12-01**. Week 1 is assumed to have started on Monday 2026-10-26; the time after Week 4 is reserved for reruns, the report and the demonstration.
+
+| Milestone | Date | Gate |
+| --- | --- | --- |
+| Week 1 ends; `1b` energy go/no-go | 2026-11-01 | Qualified whole-laptop energy source named, or measured energy declared unavailable |
+| Week 2 ends; `2d` contracts and fixtures handed off | 2026-11-08 | James and Shawn load all fixtures without a running model |
+| Week 3 ends; `3h` evaluation freeze | 2026-11-15 | Pilot reviewed, `3c` smoke run passed, settings frozen |
+| Week 4 ends; final trials and stability run complete | 2026-11-22 | `4a`–`4d` evidence saved |
+| Buffer: reruns, report, demonstration and reproduction | 2026-11-23 to 2026-11-30 | `4e` and `4f` complete |
+| Pencils down | 2026-12-01 | Final deliverables submitted |
 
 ### Scope and ownership
 
@@ -142,11 +158,12 @@ Measure resolution/crop effects, output-token limits, and valid static-prefix ca
 | Artifact | Required information | Producer → consumer |
 | --- | --- | --- |
 | Annotation records | Video/session ID, event ID, class, object if relevant, observable event interval, priority | James → evaluator |
-| Prediction records | Run/video ID, prediction ID, source-frame time, response-available time, event label, object, description, request status | Austin/Alejandro → James |
+| Prediction records | Run/video ID, prediction ID, source-frame time, response-available time, event label, object, description, request status; events come from the shared `2b` derivation | Austin/Alejandro → James |
 | Request/gate records | Trigger or skip reason, frame time, inference mode, latency, output length, available token/cache statistics | Austin/Alejandro → Shawn |
 | Power samples | Run ID, monotonic elapsed time, power in W or cumulative energy in J, sensor and domain, sample validity | Austin → Shawn |
-| Run manifest | Schema version, configuration, video/session, repeat, model/build revisions, hardware/backend, power mode, measured interval and completion status | Core runtime initially; Shawn's runner later → all tools |
-| Metrics/error reports | Matched event/prediction IDs, TP/FP/FN counts, duplicates, event delay, aggregate metrics | James → Shawn and report |
+| Run manifest | Schema version, configuration, video/session, repeat, model/build revisions, hardware/backend, power mode, measured interval, AC/battery state and completion status | Core runtime initially; Shawn's runner later → all tools |
+| Metrics/error reports | Matched event/prediction IDs, TP/FP/FN counts, duplicates, event delay, aggregate metrics; schema and fixture provided in `2d` | James → Shawn and report |
+| Application run interface (rev. 6) | Config path, live or replay input, output directory, manifest writing, exit status | Austin/Alejandro → Shawn's runner |
 
 Use video-relative time for event matching and a shared monotonic timeline for energy/inference alignment. Keep source-frame time and response-available time distinct so a delayed response is not credited as an immediate detection. Store unavailable sensor or token values explicitly as missing.
 
@@ -162,7 +179,7 @@ Shawn defines these comparisons: camera/model idle; fixed sampling at several fe
 
 Report total energy and incremental energy above the camera-and-loaded-model idle condition separately. Label whole-laptop battery energy separately from CPU/package estimates. Integrate power over the actual observed interval, handle supported counter rollover, avoid summing overlapping energy domains, and mark gaps rather than silently interpolating long missing intervals. Distinguish measured duration from hourly normalization.
 
-The energy controller uses measured cost estimates per inference mode and an incremental allowance above measured idle. Account for continuous gate overhead as well as VLM calls. Reject infeasible budget configurations below the measured energy floor or explicitly report their infeasibility. Record high-priority overrides and resulting overspend.
+The energy controller uses measured cost estimates per inference mode and an incremental allowance above measured idle. Account for continuous gate overhead as well as VLM calls. Reject infeasible budget configurations below the measured energy floor or explicitly report their infeasibility. On the WSL2 platform the accounting domain is whole-laptop battery energy, so per-mode costs come from long calibration runs in `3c` rather than from single calls (rev. 6). Record high-priority overrides and resulting overspend.
 
 ### Proposed tool interfaces
 
@@ -246,23 +263,23 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 | [1e](../energy-aware-vlm-implementation/phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md) | 1 | James | Event definitions and pilot dataset | None; independent discovery/build item | P0 | [#5](https://github.com/austincbaker/cap6411-cv-systems/issues/5) |
 | [1f](../energy-aware-vlm-implementation/phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md) | 1 | Shawn | Measurement protocol and research review | None; independent discovery/build item | P1 | [#6](https://github.com/austincbaker/cap6411-cv-systems/issues/6) |
 | [2a](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md) | 2 | Alejandro | Change gate and relevance rules | `1c`, `1d`, `1e` | P1 | [#7](https://github.com/austincbaker/cap6411-cv-systems/issues/7) |
-| [2b](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md) | 2 | Alejandro | Latest-frame scheduling and scene state | `1d`, `2a` | P1 | [#8](https://github.com/austincbaker/cap6411-cv-systems/issues/8) |
+| [2b](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md) | 2 | Alejandro | Latest-frame scheduling and scene state | `1d`, `2a`, `2c` | P1 | [#8](https://github.com/austincbaker/cap6411-cv-systems/issues/8) |
 | [2c](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | 2 | Austin | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) |
-| [2d](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin and Alejandro | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
+| [2d](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin (lead) and Alejandro | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
 | [2e](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md) | 2 | James | Annotated dataset, grouped splits and scoring examples | `1e`, `2d` | P1 | [#11](https://github.com/austincbaker/cap6411-cv-systems/issues/11) |
-| [2f](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2f-benchmark-configurations.md) | 2 | Shawn | Frozen benchmark protocol and configurations | `1f`, `2d` | P1 | [#12](https://github.com/austincbaker/cap6411-cv-systems/issues/12) |
+| [2f](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2f-benchmark-configurations.md) | 2 | Shawn | Benchmark protocol and configuration templates | `1f`, `2d` | P1 | [#12](https://github.com/austincbaker/cap6411-cv-systems/issues/12) |
 | [3a](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md) | 3 | Austin | Calibrated energy-budget admission | `1b`, `2d`, `2f` | P1 | [#13](https://github.com/austincbaker/cap6411-cv-systems/issues/13) |
 | [3b](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md) | 3 | Austin | Measured image, output and cache ablations | `2c`, `2d`, `2f` | P2 | [#14](https://github.com/austincbaker/cap6411-cv-systems/issues/14) |
-| [3c](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md) | 3 | Alejandro | Integrated budget-aware application | `2a`, `2b`, `3a`, `3b` | P1 | [#15](https://github.com/austincbaker/cap6411-cv-systems/issues/15) |
-| [3d](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3d-event-matching.md) | 3 | James | Deterministic one-to-one event matching | `2d`, `2e` | P1 | [#16](https://github.com/austincbaker/cap6411-cv-systems/issues/16) |
+| [3c](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md) | 3 | Alejandro | Integrated budget-aware application | `2a`, `2b`, `3a` | P1 | [#15](https://github.com/austincbaker/cap6411-cv-systems/issues/15) |
+| [3d](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3d-event-matching.md) | 3 | James | Deterministic one-to-one event matching | `2d` | P1 | [#16](https://github.com/austincbaker/cap6411-cv-systems/issues/16) |
 | [3e](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md) | 3 | James | Event metrics and scoring command | `3d` | P1 | [#17](https://github.com/austincbaker/cap6411-cv-systems/issues/17) |
 | [3f](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md) | 3 | Shawn | Repeated-trial benchmark runner | `1d`, `2d`, `2f` | P1 | [#18](https://github.com/austincbaker/cap6411-cv-systems/issues/18) |
 | [3g](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md) | 3 | Shawn | Energy analysis, comparison tables and figures | `2d`, `2f`, `3e`, `3f` | P1 | [#19](https://github.com/austincbaker/cap6411-cv-systems/issues/19) |
-| [3h](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md) | 3 | All | Pilot comparison and final evaluation freeze | `3a`, `3b`, `3c`, `3e`, `3f`, `3g` | P1 | [#20](https://github.com/austincbaker/cap6411-cv-systems/issues/20) |
-| [4a](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md) | 4 | James | Held-out event and description evaluation | `3h` | P1 | [#21](https://github.com/austincbaker/cap6411-cv-systems/issues/21) |
+| [3h](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md) | 3 | All | Pilot comparison and final evaluation freeze | `2e`, `3a`, `3b`, `3c`, `3e`, `3f`, `3g` | P1 | [#20](https://github.com/austincbaker/cap6411-cv-systems/issues/20) |
+| [4a](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md) | 4 | James | Held-out event and description evaluation | `3h`, `4b` | P1 | [#21](https://github.com/austincbaker/cap6411-cv-systems/issues/21) |
 | [4b](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md) | 4 | Shawn | Repeated energy trials and final plots | `3h` | P1 | [#22](https://github.com/austincbaker/cap6411-cv-systems/issues/22) |
 | [4c](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md) | 4 | Austin and Alejandro | Stability run and blocking defect resolution | `3h` | P1 | [#23](https://github.com/austincbaker/cap6411-cv-systems/issues/23) |
-| [4d](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md) | 4 | Austin and Shawn | Budget adherence and energy findings | `4b`, `4c` | P1 | [#24](https://github.com/austincbaker/cap6411-cv-systems/issues/24) |
+| [4d](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md) | 4 | Austin and Shawn | Budget adherence and energy findings | `4a`, `4b`, `4c` | P1 | [#24](https://github.com/austincbaker/cap6411-cv-systems/issues/24) |
 | [4e](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4e-research-report.md) | 4 | James and Shawn | Final research report with technical contributions | `4a`, `4b`, `4c`, `4d` | P1 | [#25](https://github.com/austincbaker/cap6411-cv-systems/issues/25) |
 | [4f](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md) | 4 | All | Demonstration and independent reproduction | `4a`, `4b`, `4c`, `4e` | P1 | [#26](https://github.com/austincbaker/cap6411-cv-systems/issues/26) |
 | [4g](../energy-aware-vlm-implementation/phase-4-experiments-report-and-demonstration/4g-failure-review-viewer.md) | 4 | James | Optional failure-review viewer (optional) | `3e` | P3 | [#27](https://github.com/austincbaker/cap6411-cv-systems/issues/27) |
@@ -276,7 +293,9 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 - [ ] `tests/test_event_metrics.py` — James verifies empty predictions, no-event clips, false alarms and undefined metric handling.
 - [ ] `tests/test_energy_analysis.py` — Shawn checks known constant-power traces, irregular sample intervals, supported rollover, gaps, unit conversions and idle subtraction.
 - [ ] `tests/test_benchmark_runner.py` — Shawn verifies unique run outputs, repeat counts and failed-trial recording with a lightweight fake application.
-- [ ] `tests/test_scheduler.py` — Alejandro verifies cooldown/refresh behavior, latest-frame replacement and no accumulated stale queue.
+- [ ] `tests/test_scheduler.py` — Alejandro verifies cooldown/refresh behavior, latest-frame replacement, no accumulated stale queue, and deterministic change-score cases: identical frames, global versus regional changes, threshold boundaries, reference updates, gradual change and lighting-only variation.
+- [ ] `tests/test_prompts.py` — Austin verifies prompt construction, valid parsing, malformed or partial responses and out-of-vocabulary labels (rev. 6).
+- [ ] `tests/test_contracts.py` — Austin and Alejandro verify that every fixture validates and malformed records fail through the shared validator used by the scorer and analyzer (rev. 6).
 - [ ] `tests/test_budget.py` — Austin verifies admission under known costs, allowance refill, infeasible budgets and explicit overspend accounting.
 - [ ] Establish the test setup during implementation and run `python -m pytest tests/` once these proposed files exist; document any repository-wide checks actually adopted.
 - [ ] Manually verify changed-image processing with cache enabled, camera/model failures and long-run application stability.
@@ -311,6 +330,7 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 | `tests/test_inference_client.py`, `tests/test_energy_monitor.py`, `tests/test_capture_sources.py` | Proposed targeted Phase 1 verification paths from direct expansion; Austin/Alejandro. |
 | `tests/test_event_matching.py`, `tests/test_event_metrics.py` | Proposed evaluator correctness tests; James. |
 | `tests/test_energy_analysis.py`, `tests/test_benchmark_runner.py` | Proposed energy math and experiment execution tests; Shawn. |
+| `src/contracts.py`, `tests/test_contracts.py`, `tests/test_prompts.py` | Proposed shared contract validator and prompt-validation tests (rev. 6); Austin/Alejandro. |
 | `tests/test_scheduler.py`, `tests/test_budget.py` | Proposed scheduler and controller correctness tests; Alejandro/Austin. |
 | `data/README.md`, `docs/methodology.md`, `docs/final_report.md` | Proposed data protocol, measurement method and report; James/Shawn coordinate, all contribute. |
 
@@ -320,7 +340,7 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 
 - **R01 — Late handoff:** James and Shawn cannot complete tools if schemas arrive in Week 4. Deliver small valid fixtures by the end of Week 2 and coordinate any subsequent format changes.
 - **R02 — Limited availability:** Give James the scorer and Shawn the runner/analyzer as bounded deliverables. Keep the viewer and extra visualizations optional; pair briefly on setup and review numerical correctness.
-- **R03 — Hardware telemetry (rev. 1):** OS selection is resolved as Ubuntu 22.04.5 LTS; sensor availability remains an implementation-time check in `1b`. Do not assume Intel RAPL or a laptop battery merely from the OS. Keep domains separate and choose feasible budgets from actual measurements.
+- **R03 — Hardware telemetry (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters; package energy is unavailable. Whole-laptop battery energy, measured unplugged, is the only candidate and must pass the `1b` go/no-go by 2026-11-01. Unplugged runs limit trial length per charge and include Windows background activity; `2f` controls AC/battery state, start charge, power plan and background apps. If no source qualifies, report energy as unavailable rather than estimated.
 - **R04 — Scope growth:** Freeze core features at the end of Week 3. Defer learned gating and advanced visual/cache optimizations when required evaluation is at risk.
 - **R05 — Small-model accuracy:** Separate gate misses from VLM errors, use a narrow task vocabulary and retain difficult/negative examples in the evaluation.
 - **R06 — Unfair comparisons:** Include matched invocation counts and identical primary model settings; document overload, output limits and frame drops.
@@ -440,3 +460,21 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 **Changes:** The planning-quality note and R09 now record that `AGENTS.md` exists while dependency, run and test commands remain TODO until item `1a`. `AGENTS.md` adds plan-document authority, item/issue tracking conventions, ownership boundaries, the gitignored external `.cache/llama.cpp/` checkout, and data/measurement-integrity rules taken from this plan. It also states that live smoke checks are acceptance evidence produced only on the designated laptop, and that `README.md` remains the single source for setup steps.
 
 **Scope unchanged:** No decision, dependency edge, owner or priority changed. No application code was implemented and all implementation statuses are unchanged.
+
+
+### Revision 6 — 2026-10-27 — review fixes, WSL2 platform and dated milestones
+
+**Trigger:** Austin requested a plan review; a second review confirmed the findings with corrections. Austin chose WSL2 as the experiment platform, the long-run battery fallback, fixture-based controller logic with live calibration in `3c`, a stability smoke run in `3c`, and pencils down on 2026-12-01. Revision 5 (the `1a`/`1b` implementation) is on branch `feat/1a-1b-inference-telemetry` pending merge.
+
+**Decision changes:**
+
+1. **Platform and energy (D11, D12, R03):** Ubuntu 22.04.5 under WSL2 is the experiment platform. Package energy is unavailable; whole-laptop battery energy measured unplugged must pass a dated `1b` go/no-go, and per-mode costs come from long runs.
+2. **Event derivation (D13):** `2b` owns normalizing observations and differencing them against confirmed state; all policies share it.
+3. **Single freeze (D14):** `2f` becomes "Benchmark protocol and configuration templates"; `3h` freezes tolerance, horizon, normalization, matched rate, budgets and the review protocol.
+4. **Schedule:** Dated milestones added, assuming Week 1 began 2026-10-26.
+
+**Dependency changes (59 → 61 edges):** removed `3b → 3c` and `2e → 3d`; added `2c → 2b`, `2e → 3h`, `4b → 4a` and `4a → 4d`. `3e → 3g` is kept.
+
+**Item changes:** `1b` go/no-go and AC/battery recording; `2a` change-score test cases; `2b` event derivation; `2c` structured observations and `tests/test_prompts.py`; `2d` Austin-led drafting, application run interface, metrics fixture, shared validator and `tests/test_contracts.py`; `2e` early recording and review-protocol draft; `2f` laptop-hours budget and WSL battery controls; `3a` fixture-based logic; `3c` live calibration, stability smoke run and minimal UI; `3d` fixture-based start; `3h` sole freeze; `4a` scores `4b` logs; `4d` publishes combined results.
+
+**Unchanged:** Owners (apart from `2d` drafting lead), priorities, scope and all implementation statuses. The plan copies remain synchronized; the GitHub issues are updated to match.

@@ -2,23 +2,24 @@
 
 **Live issue:** [#24](https://github.com/austincbaker/cap6411-cv-systems/issues/24)
 **Priority:** P1 (`priority:P1`)
-**GitHub blocked by:** [4b (#22)](https://github.com/austincbaker/cap6411-cv-systems/issues/22), [4c (#23)](https://github.com/austincbaker/cap6411-cv-systems/issues/23)
+**GitHub blocked by:** [4a (#21)](https://github.com/austincbaker/cap6411-cv-systems/issues/21), [4b (#22)](https://github.com/austincbaker/cap6411-cv-systems/issues/22), [4c (#23)](https://github.com/austincbaker/cap6411-cv-systems/issues/23)
 
 **Phase**: 4 — Complete experiments, report and demonstration
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-4--complete-experiments-report-and-demonstration-week-4); D08, D11; R03, R08
-**Depends on**: [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md)
+**Depends on**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md)
 **Blocks**: [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md)
 
 ## Scope
 
-Owners: Austin and Shawn. Interpret the energy controller's observed behavior and the system's measured energy costs. Report adherence, exceptions, domain limits and the fixed idle floor rather than implying all energy is controllable.
+Owners: Austin and Shawn. Interpret the energy controller's observed behavior and the system's measured energy costs. Report adherence, exceptions, domain limits and the fixed idle floor rather than implying all energy is controllable. Publish the combined energy-quality tables and figures by joining `4a` scores to `4b` trials (rev. 6).
 
 ## Tasks
 
 - [ ] Compare target allowances with measured consumption using the declared accounting domain.
 - [ ] Separate idle/gate/inference costs where measurements support attribution.
 - [ ] Document overspend, infeasible budgets and telemetry uncertainty.
+- [ ] Publish combined energy-quality tables and figures joining `4a` held-out scores to `4b` trials.
 
 ## Files to be touched
 
@@ -47,6 +48,7 @@ The stub is considered complete when every row below shows 🟢.
 | 1 | Compare target allowances with measured consumption using the declared accounting domain. | [Tasks](#tasks) | Deviation calculations use compatible units, domains and windows. | — | ⬜ |
 | 2 | Separate idle/gate/inference costs where measurements support attribution. | [Tasks](#tasks) | Unsupported attribution is marked unavailable rather than inferred as fact. | — | ⬜ |
 | 3 | Document overspend, infeasible budgets and telemetry uncertainty. | [Tasks](#tasks) | The findings explain when the controller respects or exceeds the configured target. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 4 | Publish combined energy-quality tables and figures joining `4a` held-out scores to `4b` trials. | [Tasks](#tasks) | Each combined point links to its scored prediction log and its energy trial. | — | ⬜ |
+| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
 
 <!-- impl-notes-anchor -->

@@ -2,17 +2,17 @@
 
 **Live issue:** [#16](https://github.com/austincbaker/cap6411-cv-systems/issues/16)
 **Priority:** P1 (`priority:P1`)
-**GitHub blocked by:** [2d (#10)](https://github.com/austincbaker/cap6411-cv-systems/issues/10), [2e (#11)](https://github.com/austincbaker/cap6411-cv-systems/issues/11)
+**GitHub blocked by:** [2d (#10)](https://github.com/austincbaker/cap6411-cv-systems/issues/10)
 
 **Phase**: 3 — Integrate budget control and owned evaluation tools
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-3--integrate-budget-control-and-owned-evaluation-tools-week-3); D06, D07; R01
-**Depends on**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2e](../phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md)
+**Depends on**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md)
 **Blocks**: [3e](../phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md)
 
 ## Scope
 
-Owner: James, with Alejandro reviewing reference cases. Implement deterministic one-to-one matching between predictions and labeled events. Apply frozen label and timing rules so delays, duplicates and wrong events are counted consistently.
+Owner: James, with Alejandro reviewing reference cases. Implement deterministic one-to-one matching between predictions and labeled events. Apply the contract's label and timing rules so delays, duplicates and wrong events are counted consistently. Build against the `2d` hand-scored fixtures; the full `2e` dataset is checked in `3h` (rev. 6).
 
 ## Tasks
 

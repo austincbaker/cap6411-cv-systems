@@ -28,7 +28,7 @@
   quality and response delay.
 - **Stack:** Python application and evaluation tools; a persistent local
   `llama-server` (llama.cpp) running a compact SmolVLM-family model, CPU-first.
-  The primary experiment platform is Ubuntu 22.04.5 LTS on the designated
+  The experiment platform is Ubuntu 22.04.5 LTS under WSL2 on the team
   laptop.
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below). The
@@ -101,8 +101,10 @@ rather than duplicating it once those steps exist.
   total versus incremental energy separate. Do not label package energy as
   whole-system energy.
 - Measured energy, latency and model-compatibility results count only when
-  produced on the designated Ubuntu laptop. Do not report measurements from a
-  development host such as WSL2 as experiment results.
+  produced on the team laptop's WSL2 experiment platform. WSL2 exposes no
+  package (RAPL) energy, so energy results are whole-laptop battery energy
+  from runs on battery power, using the source qualified in item `1b`; report
+  energy as unavailable when no source qualifies.
 - Write each run to a new output directory and never overwrite prior results.
   After the item `3h` evaluation freeze, a behavior change requires rerunning
   the affected experiments, and held-out data must not be used for tuning.
@@ -148,7 +150,7 @@ rather than duplicating it once those steps exist.
   jobs merely to gain extra confidence. Follow the repository's approval and
   environment rules for those operations.
 - Live model, camera and sensor smoke checks are required acceptance evidence
-  for items such as `1a`–`1c`, but they run only on the designated laptop and
+  for items such as `1a`–`1c`, but they run only on the experiment platform and
   are performed or approved by the item owner. Automated tests use fake
   services, sensors and clocks, and must not download models or need a webcam.
 

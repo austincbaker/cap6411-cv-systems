@@ -32,11 +32,13 @@ Not a port. The existing repository contains a placeholder `README.md` and a Pyt
 ## Open questions
 
 - [ ] Verify the actual sensor permissions, availability and domain on the selected primary laptop before final trials.
+- [ ] **Go/no-go by 2026-11-01 (rev. 6):** The platform is Ubuntu 22.04.5 under WSL2, which exposes no powercap/RAPL counters. Test, on battery power, whether the WSL battery passthrough or Windows battery reporting yields updating whole-laptop discharge readings, and name the qualified source. If neither qualifies, record that measured-energy claims are unavailable and notify the team before `2f`.
 
 ## Acceptance criteria
 
 - [ ] A short run records a declared power/energy domain and units.
 - [ ] Unsupported sensors or gaps are recorded as unavailable instead of zero consumption.
+- [ ] A dated go/no-go names the qualified whole-laptop energy source, or records that measured energy is unavailable; every trace records AC and battery state.
 
 ## Definition of Done
 

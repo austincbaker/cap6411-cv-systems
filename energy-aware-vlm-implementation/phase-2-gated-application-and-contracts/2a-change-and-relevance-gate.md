@@ -24,7 +24,7 @@ Owner: Alejandro. Add cheap downsampled and regional change detection, then rele
 
 - `src/gates/change.py` — Proposed change scores and references.
 - `src/gates/scheduler.py` — Proposed relevance/cooldown/refresh decisions.
-- `tests/test_scheduler.py` — Observable refresh and cooldown behavior.
+- `tests/test_scheduler.py` — Observable refresh and cooldown behavior, plus deterministic change-score cases: identical frames, global versus regional changes, threshold boundaries, acknowledged/recent-reference updates, gradual change and lighting-only variation.
 
 ## Source references (if porting)
 

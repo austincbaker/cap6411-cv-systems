@@ -8,7 +8,7 @@
 **Status**: ⬜ Not started
 **Plan refs**: [Master plan](../plan.md#phase-3--integrate-budget-control-and-owned-evaluation-tools-week-3); D03, D09; R04, R05
 **Depends on**: [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md)
-**Blocks**: [3c](../phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md), [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
+**Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
 ## Scope
 
