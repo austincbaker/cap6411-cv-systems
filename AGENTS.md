@@ -75,7 +75,10 @@ rather than duplicating it once those steps exist.
 - **Lint, format, and type-check:** Run `uv run ruff check src scripts tests`,
   `uv run ruff format --check src scripts tests` and `git diff --check`.
   No static type checker is configured. Use `uv lock --check` after dependency changes.
-- **Required CI checks:** No CI configuration is present in this checkout.
+- **Required CI checks:** GitHub Actions workflow `.github/workflows/ci.yml` runs on pushes
+  and pull requests using Ubuntu 22.04 and Python 3.10. It synchronizes the locked development
+  environment, checks `uv.lock`, runs the test suite, Ruff lint/format checks and a repository
+  whitespace check. It intentionally excludes live model, camera and sensor checks.
 
 ## Planning documents
 
