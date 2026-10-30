@@ -6,11 +6,11 @@ Shawn owns the later experiment protocol, controls, repeat strategy and analysis
 
 ## Research questions
 
-# Primary research question
+## Primary research question
 
 Can runtime scheduling reduce the energy consumption of an always-on, on-device VLM assistant while maintaining useful event quality and acceptable response delay?
 
-# Supplementary research questions
+## Supplementary research questions
 
   1. How does event-driven VLM invocation affect energy consumption compared with fixed-interval invocation?
   2. How much event quality is retained, and how is response delay affected, when VLM calls are selectively scheduled?
@@ -19,24 +19,25 @@ The research questions use the same event-quality and response-delay definitions
 
 ## Related work and research framing
 
-# Efficient VLM architectures
-# SmolVLM
+## Efficient VLM architectures
+### SmolVLM
 
-SmolVLM investigates how vision language models can be made small enough for resource constrained deployment while retaining useful multimodal capabilities. Its approach focuses on compact VLM configurations and reducing the amount of visual information that must be processed by the language model.
-In this project, SmolVLM is important as related work and as the basis for the primary VLM. It shows the use of a compact model when compute and memory are limited and shows that efficiency can be improved within the VLM architecture itself.
-However, architectural efficiency and runtime scheduling are different problems. SmolVLM primarily addresses the cost and capability of the model when inference is performed. Our project instead investigates whether an always-on system can obtain additional energy savings by deciding when VLM inference should occur. Therefore, SmolVLM provides the efficient inference foundation, while invocation frequency and timing remain system-level variables evaluated by this project.
+SmolVLM addresses the computational and memory requirements that limit the deployment of vision language models on resource constrained mobile and edge devices. The authors argue that smaller VLMs can remain inefficient when they inherit design choices from larger models, including extensive image tokenization. SmolVLM therefore investigates architectural configurations, tokenization strategies, and training data curation designed specifically for resource efficient multimodal inference. [1]
+Its architecture encodes images or sampled video frames into visual features, rearranges those features using a pixel shuffle operation, and projects them into the language model's input space as visual tokens. These visual tokens are combined with text embeddings before being processed by the language model. The paper evaluates compact models at several scales and reports that its smallest 256M parameter model requires less than 1 GB of GPU memory during inference. SmolVLM also evaluates both image and video understanding, making it relevant to resource constrained systems that process continuous visual inputs [1].
+For this project, SmolVLM provides the architectural foundation for efficient VLM inference. Its results motivate using a compact multimodal model rather than a substantially larger VLM when targeting constrained hardware. However, SmolVLM primarily addresses the efficiency and capability of the model when inference occurs. Our project investigates a complementary runtime question: whether additional energy savings can be achieved by controlling when the VLM is invoked. Therefore, event driven invocation, fixed interval invocation, and budget aware scheduling are treated as experimental runtime policies rather than benefits established by the SmolVLM paper. [1]
 
-# MobileVLM
+### MobileVLM
 
-MobileVLM studies vision language modeling for resource constrained mobile and edge environments. A central efficiency idea is reducing the visual information passed into the language model so that multimodal inference requires less computation. Its architecture demonstrates that efficiency must be considered across both visual processing and language model execution when targeting constrained hardware.
-It is relevant to our project because an always on assistant cannot treat the cost of visual processing as negligible. Reducing the computational cost associated with each VLM invocation complements the project's goal of reducing unnecessary invocations.
-MobileVLM primarily addresses architectural and per-inference efficiency. Our project studies a different but complementary question. It is whether temporal and event driven scheduling can reduce the number and timing of expensive VLM calls while retaining useful event coverage. The primary model and backend will therefore remain fixed when comparing runtime scheduling policies.
+MobileVLM targets multimodal vision language inference on mobile devices. The model combines mobile oriented architectural choices with language models at the 1.4B- and 2.7B-parameter scales, a vision model pretrained in a CLIP style approach, and an efficient cross modality projector. The work therefore approaches efficiency as an architectural problem spanning both the language and visual components of a VLM. [2]
+The authors evaluate MobileVLM on standard vision language benchmarks and also measure inference speed on resource constrained hardware, including a Qualcomm Snapdragon 888 CPU and NVIDIA Jetson Orin GPU. This hardware evaluation makes MobileVLM particularly relevant to our project because it demonstrates VLM inference in environments closer to mobile and edge deployment rather than evaluating performance exclusively on large server class systems. [2]
+For this project, MobileVLM provides evidence that the cost of each multimodal inference can be reduced through mobile oriented model and projection design. Our project investigates a complementary runtime problem. Rather than modifying MobileVLM's architecture, we study whether an efficient on device VLM system can further control resource use by selecting when expensive VLM inference occurs. Fixed interval, event driven, and budget aware invocation are therefore runtime policies evaluated by our project rather than benefits established by MobileVLM.
 
-# FastVLM
+### FastVLM
 
-FastVLM examines end-to-end VLM efficiency with particular attention to visual encoding, visual-token processing and inference latency. The work demonstrates the importance of considering the complete multimodal inference path rather than evaluating language model size alone. Its design emphasizes efficient visual processing and reducing the amount of visual information that must subsequently be handled by the language model.
-FastVLM is especially relevant to this project because latency and the cost of visual processing affect the feasibility of an always-on assistant. An efficient runtime policy cannot compensate for arbitrarily expensive individual inferences, so architectural and runtime efficiency should be treated as complementary parts of the system.
-It focuses on making an inference more efficient, whereas our project asks whether the system needs to perform that inference at every candidate time. Our evaluation therefore focuses on temporal selection. Like comparing fixed interval, event driven and budget aware invocation under controlled conditions.
+FastVLM investigates the efficiency of the visual processing stage of vision language models, particularly when processing high resolution images. The authors identify two important sources of VLM latency: the time required by the vision encoder and the number of visual tokens subsequently passed to the language model. The paper analyzes the interaction among image resolution, vision-encoder latency, visual token count, language model size, accuracy, and overall latency. [3]
+FastVLM introduces FastViTHD, a hybrid vision encoder designed to produce fewer visual tokens while reducing the encoding time required for high resolution images. The approach seeks a better tradeoff among image resolution, latency, model size, and accuracy without requiring an additional visual token pruning stage. In the paper's LLaVA-1.5 evaluation setup, FastVLM reports a 3.2× improvement in time-to-first token while maintaining similar benchmark performance relative to prior approaches. [4]
+FastVLM is relevant to this project because it demonstrates that the cost of VLM inference depends on more than the size of the language model. Visual encoding, image resolution, and the number of visual tokens passed to the language model can also substantially affect inference latency. These factors help establish why efficient visual processing matters for an on device VLM system.
+Our project examines a complementary runtime dimension. FastVLM seeks to make an individual inference more efficient, whereas our runtime scheduler investigates whether an inference needs to occur at each candidate time. We therefore treat architectural efficiency and temporal scheduling as separate but complementary approaches to reducing the resource requirements of an always on VLM assistant.
 
 # Conditional and streaming perception
 # Edge energy-aware inference
@@ -44,16 +45,16 @@ It focuses on making an inference more efficient, whereas our project asks wheth
 
 The project distinguishes architectural efficiency from runtime scheduling.
 
-Architectural efficiency reduces the cost of an individual VLM inference through techniques such as compact models, more efficient visual processing, and reductions in visual-token processing.
+Architectural efficiency reduces the cost of an individual VLM inference through techniques such as compact models, more efficient visual processing, and reductions in visual token processing.
 
-This project investigates a complementary system-level question: whether an always-on VLM assistant can reduce energy consumption by controlling when expensive VLM inference occurs. The evaluation compares fixed-interval, event-driven, and budget-aware VLM invocation while holding the primary model/backend and experimental controls fixed.
+This project investigates a complementary system level question: whether an always on VLM assistant can reduce energy consumption by controlling when expensive VLM inference occurs. The evaluation compares fixed-interval, event-driven, and budget-aware VLM invocation while holding the primary model/backend and experimental controls fixed.
 
 The effectiveness of runtime scheduling is treated as an experimental question. Energy savings, event quality, response delay, and adherence to the energy allowance are measured rather than assumed.
 
 The report will frame the work against compact VLMs (including SmolVLM, MobileVLM and
-FastVLM), conditional and streaming perception, and edge energy-aware inference. Its
-contribution is runtime scheduling: comparing fixed-interval, event-driven and
-budget-aware VLM invocation under the same replay content and measurement controls.
+FastVLM), conditional and streaming perception, and edge energy aware inference. Its
+contribution is runtime scheduling: comparing fixed interval, event driven and
+budget aware VLM invocation under the same replay content and measurement controls.
 
 ## Measurement protocol
 
@@ -188,3 +189,11 @@ condition. It is not appropriate to apply that calculation to the constant WSL r
 Small raw traces and the live smoke summary are linked in
 [validation-1a-1b.md](validation-1a-1b.md). Long-run trials and statistical comparisons remain
 the later evaluation tasks.
+
+## References 
+
+[1] A. Marafioti et al., "SmolVLM: Redefining Small and Efficient Multimodal Models," arXiv:2504.05299, 2025.
+
+[2] X. Chu et al., "MobileVLM: A Fast, Strong and Open Vision Language Assistant for Mobile Devices," arXiv:2312.16886.
+
+[3] P. K. A. Vasu et al., "FastVLM: Efficient Vision Encoding for Vision Language Models," arXiv:2412.13303.
