@@ -34,7 +34,7 @@ For this project, MobileVLM provides evidence that the cost of each multimodal i
 
 #### FastVLM
 
-FastVLM investigates the efficiency of the visual processing stage of vision language models, particularly when processing high resolution images. The authors identify two important sources of VLM latency: the time required by the vision encoder and the number of visual tokens subsequently passed to the language model. The paper analyzes the interaction among image resolution, vision-encoder latency, visual token count, language model size, accuracy, and overall latency. [3]
+FastVLM investigates the efficiency of the visual processing stage of vision language models, particularly when processing high resolution images. The authors identify two important sources of VLM latency: the time required by the vision encoder and the number of visual tokens subsequently passed to the language model. The paper analyzes the interaction among image resolution, vision encoder latency, visual token count, language model size, accuracy, and overall latency. [3]
 FastVLM introduces FastViTHD, a hybrid vision encoder designed to produce fewer visual tokens while reducing the encoding time required for high resolution images. The approach seeks a better tradeoff among image resolution, latency, model size, and accuracy without requiring an additional visual token pruning stage. In the paper's LLaVA-1.5 evaluation setup, FastVLM reports a 3.2× improvement in time-to-first token while maintaining similar benchmark performance relative to prior approaches. [3]
 FastVLM is relevant to this project because it demonstrates that the cost of VLM inference depends on more than the size of the language model. Visual encoding, image resolution, and the number of visual tokens passed to the language model can also substantially affect inference latency. These factors help establish why efficient visual processing matters for an on device VLM system.
 Our project examines a complementary runtime dimension. FastVLM seeks to make an individual inference more efficient, whereas our runtime scheduler investigates whether an inference needs to occur at each candidate time. We therefore treat architectural efficiency and temporal scheduling as separate but complementary approaches to reducing the resource requirements of an always on VLM assistant.
@@ -71,14 +71,191 @@ budget aware VLM invocation under the same replay content and measurement contro
 ## Measurement protocol
 
 ### Measurement domains
-### standard test configuration
-### recorded-video replay controls
+
+Energy results are reported according to the domain measured by the available sensor.
+Package energy and whole system battery energy are treated as separate quantities and are not combined or substituted for one another.
+Whole system battery energy is determined only from a qualified battery energy source
+under a valid discharge condition. Package energy is reported only when an
+appropriate package energy counter is available and qualified.
+Idle and workload energy may be compared or subtracted only when they use compatible
+measurement domains and experimental conditions. Measurements unavailable on the test
+hardware are reported as unavailable rather than estimated from another sensor domain.
+
+### Standard test configuration
+
+Each comparison records and, where applicable, holds fixed:
+
+- Test machine and hardware configuration
+- Operating system environment
+- Power mode
+- AC/battery state
+- Display state
+- Primary VLM
+- Model quantization
+- Inference backend and build
+- Generation parameters and output bound
+- Input video
+- Replay speed
+- Energy measurement source and polling configuration
+- Application logging/display behavior
+
+Unknown configuration values are recorded as pending until measured or finalized.
+Temporal policy comparisons use the same primary model and inference backend so that
+differences between scheduling policies are not confounded with changes to the model.
+
+### recorded video replay controls
+
+Primary scheduling policy comparisons use the same recorded source video on the same
+test machine. Recorded video is replayed in real time so that scheduling behavior,
+response availability and energy measurements correspond to a common wall clock
+duration.
+Each run records both host monotonic time and source video time. Source video identity
+and timestamps are preserved so that runtime outputs can later be aligned with the
+event annotations used for quality evaluation.
+Replay overhead is part of the measured workload and is kept consistent between policy
+comparisons.
+
 ### webcam controls
+
+Live webcam measurements are treated separately from recorded video replay measurements.
+Camera acquisition and recorded video decoding can introduce different system overheads,
+so results from the two input modes are not directly substituted for one another.
+When webcam trials are performed, camera configuration, acquisition behavior and relevant
+application settings are recorded and kept consistent across the policies being compared.
+
 ### warm-up and measurement window
+
+Model loading and initialization occur before the primary measured interval. A defined
+warm-up procedure will be applied consistently before comparable trials so that startup
+behavior is not unintentionally included in only some configurations.
+Each trial records explicit measurement window start and end times. Setup and shutdown
+occur outside the primary measured interval. Requests initiated during the interval are
+tracked separately if their responses become available after the declared scoring
+horizon.
+Final warm-up duration and measured window duration will be selected using pilot latency
+and telemetry observations rather than assumed in advance.
 
 Shawn's protocol will specify the trial controls, baseline configurations, repeat strategy,
 randomized order, warm-up, missing-data handling and energy normalization before the final
 evaluation freeze.
+
+### Environmental controls
+
+Comparable trials are performed on the same machine under documented operating
+conditions. The following conditions are recorded and held fixed where feasible:
+
+- Power mode
+- AC/battery state
+- Display state
+- Background application state
+- Model and backend configuration
+- Input source and replay configuration
+- Energy sensor configuration
+
+Trial order and observed environmental deviations are recorded. A changed power state,
+unexpected interruption or other material deviation is retained in the trial record
+rather than silently ignored.
+
+### Unavailable measurements and limitations
+
+A metric is reported only when the corresponding measurement source is available and
+qualified for the experimental condition. Missing processor/package energy, invalid
+sensor samples or unsupported measurement domains are reported as unavailable rather
+than inferred from another measurement.
+
+Whole system battery measurements must not be labeled as processor energy, and
+processor/package measurements must not be labeled as whole system energy.
+
+The qualified battery source has limited update granularity and therefore is not used
+to attribute battery energy consumption to an individual VLM inference. Longer measured
+windows and repeated trials are used for whole system energy comparisons.
+
+### Initial comparison policies
+
+The initial pilot evaluates scheduling policies using the same primary VLM, inference
+backend, source video, generation settings and measurement conditions. Exact fixed
+intervals and final trial durations are not frozen in this phase; they will be selected
+using pilot latency and telemetry observations.
+
+#### Idle / no invocation condition
+
+The idle condition measures the application without VLM inference requests while keeping
+the comparison workload otherwise aligned. The model remains loaded, and normal video
+acquisition or replay, logging and other ordinary application activity continue.
+
+This condition estimates the energy associated with the surrounding application workload
+without VLM invocation. Idle energy is subtracted from another measurement only when the
+measurement domain and experimental conditions are compatible.
+
+#### Fixed interval condition
+
+The fixed interval condition invokes the VLM according to a predetermined temporal
+interval without using event or relevance information to select invocation times.
+
+Several feasible intervals will be considered after pilot measurements establish VLM
+latency and measurement behavior. If a requested interval cannot be sustained, skipped
+or overloaded calls are recorded rather than silently changing the effective policy.
+
+#### Matched invocation condition
+
+The matched invocation condition uses a prespecified sampling rule to make approximately
+the same number of VLM invocations as the event driven policy without using the
+event driven policy's event decisions to select invocation times.
+
+Invocation counts used for matching are derived from development or calibration runs or
+another prespecified rule. Held out evaluation results are not used to tune the
+matched invocation baseline.
+
+This comparison helps separate the effect of reducing the number of VLM calls from the
+effect of selecting useful invocation times.
+
+#### Event driven condition
+
+The event driven condition uses the application's event/change detection mechanism to
+determine when the primary VLM is invoked.
+
+The event detector and its configuration are recorded for each trial. VLM attempts,
+successful responses, failures, source video timestamps and response availability times
+are retained so that scheduling behavior can later be aligned with event quality
+evaluation.
+
+#### Budget aware condition
+
+The budget aware condition evaluates the full scheduling policy in which VLM invocation
+behavior is additionally constrained by the project's energy budget mechanism.
+
+The energy allowance and final policy configuration are not frozen during this phase.
+Those settings are finalized only after pilot measurements establish feasible runtime
+and measurement behavior.
+
+### Failure and exclusion handling
+
+Failures and deviations remain visible in the experimental record rather than being
+silently removed. These include:
+
+- Incomplete or invalid input
+- Missing or invalid energy samples
+- Interrupted trials
+- Model or inference failures
+- Changed power states
+- Overloaded or skipped VLM calls
+- Incomplete responses at the scoring horizon
+- Material deviations from the recorded test configuration
+
+Attempted and successful VLM invocations are reported separately. Energy consumed by a
+failed inference attempt remains part of the measured workload.
+
+A trial may be excluded from a primary comparison only for a documented reason defined
+by the protocol. Excluded trials and the reasons for exclusion remain recorded.
+
+### Energy calculations
+
+For a measured interval of duration T seconds with observed energy E joules:
+
+- Mean power (W) = E / T
+- Total energy (Wh) = E / 3600
+- Hourly normalized energy rate (Wh/hour) = E / T
+
 
 ## Sensor collection methodology
 
