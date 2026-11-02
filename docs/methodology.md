@@ -257,6 +257,82 @@ For a measured interval of duration T seconds with observed energy E joules:
 - Hourly normalized energy rate (Wh/hour) = E / T
 
 
+#### Link to event-quality evaluation
+
+Energy and runtime results are linked to event quality evaluation using a shared run
+identity and source video identity. Runtime records preserve source video timestamps
+associated with VLM requests so that invocation and response records can be associated
+with the corresponding annotated events.
+
+The evaluation join preserves:
+
+- Run ID
+- Source-video or recording ID
+- Source-video timestamp
+- VLM request time
+- Response-availability time
+- Invocation attempt and completion status
+- Failed predictions or inference attempts
+- Event matches
+- Missed events
+- False detections
+- Duplicate detections
+
+
+#### Repetition and trial ordering
+
+Final measurements retain three repeated trials for each main comparison configuration.
+Trial order is recorded and should be varied across configurations so that systematic
+effects associated with execution order are not silently attributed to a scheduling
+policy.
+
+Each repeat uses the same controlled configuration unless a deviation is explicitly
+recorded. Environmental conditions, interruptions, power-state changes and other material
+differences are preserved with the corresponding run.
+
+Pilot trials are used to evaluate procedure feasibility and are not silently substituted
+for the repeated final measurements.
+
+#### Pilot trial checklist
+
+##### Before the trial
+
+- [ ] Assign a unique run ID.
+- [ ] Record source-video identity or webcam configuration.
+- [ ] Record test machine and hardware configuration.
+- [ ] Record operating-system environment.
+- [ ] Record model, quantization and inference backend/build.
+- [ ] Record generation settings and output bound.
+- [ ] Record power mode, AC/battery state and display state.
+- [ ] Record scheduling policy and policy configuration.
+- [ ] Record energy source and polling configuration.
+- [ ] Verify required measurement sources are available and qualified.
+- [ ] Load the model.
+- [ ] Complete the defined warm-up procedure.
+
+##### During the trial
+
+- [ ] Record measurement-window start.
+- [ ] Collect raw energy telemetry.
+- [ ] Preserve host monotonic timestamps.
+- [ ] Preserve source-video timestamps.
+- [ ] Record every VLM invocation attempt.
+- [ ] Record successful responses and response-availability times.
+- [ ] Record failed, skipped or overloaded requests.
+- [ ] Record sensor gaps and invalid readings.
+- [ ] Record unexpected configuration or environmental deviations.
+
+##### After the trial
+
+- [ ] Record measurement-window end.
+- [ ] Record trial completion status.
+- [ ] Preserve raw telemetry.
+- [ ] Preserve request/response records.
+- [ ] Preserve the configuration summary and run ID.
+- [ ] Record interruptions, failures and deviations.
+- [ ] Verify source-video timestamps can be associated with event-evaluation data.
+- [ ] Confirm missing measurements were not replaced with zero.
+
 ## Sensor collection methodology
 
 ## Quantities and domains
