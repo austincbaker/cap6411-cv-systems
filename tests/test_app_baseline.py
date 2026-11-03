@@ -7,6 +7,7 @@ These run in real time on short clips, so timing assertions use tolerances.
 from __future__ import annotations
 
 import _thread
+import csv
 import json
 import socket
 import threading
@@ -18,6 +19,7 @@ import pytest
 from app.main import BaselineRun, ConfigError, main, parse_args
 from app.state import ObservationState, render_overlay
 from capture import EndReason, ReplaySource, WebcamSource
+from contracts import read_artifact, validate_run_dir
 from energy.monitor import EnergyMonitor, Sensor
 from energy.windows import WindowsBatteryReader, parse_report
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
@@ -64,7 +66,16 @@ def run_baseline(config, llama=None, *, read_timeout_s=120.0, server_idle=lambda
         server_idle=server_idle,
         **kwargs,
     )
-    return run, run.run()
+    result = run.run()
+    # Every run directory the app writes must meet the item 2d contract.
+    assert [str(i) for i in validate_run_dir(result.run_dir)] == []
+    return run, result
+
+
+def read_power(run_dir):
+    records, issues = read_artifact("power", run_dir / "power.csv")
+    assert issues == []
+    return records
 
 
 # --------------------------------------------------------------------------- interval
@@ -397,14 +408,28 @@ def test_telemetry_logs_sysfs_and_battery_rows_with_their_sources(tmp_path, clip
     run, result = run_baseline(
         config, energy_monitor=EnergyMonitor(sensors=[sensor]), battery_reader=FakeBatteryReader()
     )
-    rows = read_jsonl(result.run_dir / "telemetry.jsonl")
+    rows = read_power(result.run_dir)
     sysfs = [r for r in rows if r["source"] == "sysfs"]
     windows = [r for r in rows if r["source"] == "windows_battery"]
     assert len(sysfs) >= 4 and all(
         r["valid"] and r["value"] == pytest.approx(123.456789) for r in sysfs
     )
-    assert len(windows) >= 2 and all(r["valid"] and r["discharge_power_w"] == 11.5 for r in windows)
+    # sysfs rows sit on the same host clock as requests, inside the run.
+    times = result.manifest["times"]
+    assert all(
+        times["host_run_start_s"] - 1 <= r["host_time_s"] <= times["host_run_end_s"] for r in sysfs
+    )
+    power = [r for r in windows if r["quantity"] == "discharge_power"]
+    energy = [r for r in windows if r["quantity"] == "stored_energy"]
+    assert len(power) >= 2 and all(r["valid"] and r["value"] == 11.5 for r in power)
+    assert len(energy) == len(power) and all(
+        r["domain"] == "whole_laptop_battery" and r["raw_unit"] == "mWh" and r["unit"] == "J"
+        for r in energy
+    )
     assert all(r["run_id"] == result.manifest["run_id"] for r in rows)
+    state = result.manifest["power_state"]
+    assert state["at_start"]["ac_online"] is False
+    assert state["at_end"]["battery_status"] == "Discharging"
     telemetry = result.manifest["telemetry"]
     assert (
         telemetry["enabled"]
@@ -430,18 +455,18 @@ def test_unavailable_battery_report_is_logged_invalid_not_zero(tmp_path, clip):
     run, result = run_baseline(
         config, energy_monitor=EnergyMonitor(sensors=[]), battery_reader=reader
     )
-    rows = [
-        r
-        for r in read_jsonl(result.run_dir / "telemetry.jsonl")
-        if r["source"] == "windows_battery"
-    ]
-    assert rows and all(r["valid"] is False and r["energy_j"] is None and r["error"] for r in rows)
+    rows = [r for r in read_power(result.run_dir) if r["source"] == "windows_battery"]
+    assert rows and all(r["valid"] is False and r["value"] is None and r["error"] for r in rows)
+    with open(result.run_dir / "power.csv", newline="") as f:
+        cells = [row["value"] for row in csv.DictReader(f)]
+    assert set(cells) == {""}  # missing, never 0
+    assert result.manifest["power_state"] == {"at_start": None, "at_end": None}
 
 
 def test_telemetry_off_writes_no_samples(tmp_path, clip):
     config = config_for(tmp_path, "--duration-s", "0.2", video=clip)
     run, result = run_baseline(config)
-    assert (result.run_dir / "telemetry.jsonl").read_text() == ""
+    assert read_power(result.run_dir) == []
     assert result.manifest["telemetry"] == {"enabled": False}
 
 

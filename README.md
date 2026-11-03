@@ -216,7 +216,9 @@ the request record). After one, the app sends nothing until llama-server's
 
 ### Run directory
 
-All field names are provisional until #10 (`schema_version: "0-provisional"`).
+File formats follow the item 2d contract in
+[`docs/data-contracts.md`](docs/data-contracts.md) (`schema_version: "1-draft"`).
+Check a run directory with `uv run contracts-check runs/<run>`.
 
 - `requests.jsonl`: the client's `InferenceResult` record (`request_id`, `status`,
   `text`, `request_started_s`, `response_available_s`, `elapsed_s`, token counts,
@@ -227,12 +229,13 @@ All field names are provisional until #10 (`schema_version: "0-provisional"`).
 - `drops.jsonl`: `origin` (`app` or `source`), `reason`
   (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
   `empty_frame`, `read_failed`), `frame_id`, host times
-- `telemetry.jsonl`: one line per reading with `source` = `sysfs`
-  (`energy.monitor.Reading` fields) or `windows_battery`
-  (`energy.windows.WindowsBatteryReading` fields). Only `windows_battery` is
-  the qualified energy source; unavailable readings are `valid: false`, never `0`
-- `manifest.json`: config, source metadata (backend, requested vs observed
-  size/fps, time method), source end reason, run end reason, counts, platform
+- `power.csv`: one row per sensor value on the shared host clock, with
+  `source` = `windows_battery` (stored energy and discharge power, the
+  qualified whole-laptop source) or `sysfs`. Unavailable readings are
+  `valid=false` with an empty `value`, never `0`
+- `manifest.json`: policy, config, source metadata (backend, requested vs
+  observed size/fps, time method), AC/battery state at start and end, source
+  end reason, run end reason, counts, platform
 
 ### Time bases
 

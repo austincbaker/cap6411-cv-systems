@@ -15,12 +15,12 @@ Run directory (``--run-dir``, default ``runs/<UTC time>_<source>/``):
 - ``requests.jsonl``  one line per request (frame identity, source time,
   host request start / response-available times, status, text or error type)
 - ``drops.jsonl``     skipped ticks and frames the source dropped, with IDs and reasons
-- ``telemetry.jsonl`` power/energy samples from the telemetry monitor
-- ``manifest.json``   config, source metadata, end reasons, counts, platform
+- ``power.csv``       power/energy samples, one row per sensor reading
+- ``manifest.json``   config, source metadata, end reasons, counts, power state, platform
 
 All ``host_*`` times are ``time.monotonic()`` seconds in this process;
-``source_time_s`` is media-relative (None for webcam). Field names are
-provisional until item 2d (#10) freezes them (``schema_version``).
+``source_time_s`` is media-relative (None for webcam). The file formats are the
+item 2d contract in ``docs/data-contracts.md``, checked by ``contracts``.
 
 Exit codes: 0 completed (EOF, --duration-s, or 'q' in the window), 2 bad
 config / source failed to open / source ended in error, 130 interrupted,
@@ -42,6 +42,7 @@ qualified whole-laptop source on the WSL2 platform; unavailable elsewhere).
 from __future__ import annotations
 
 import argparse
+import csv
 import datetime as dt
 import json
 import platform
@@ -61,11 +62,13 @@ import numpy as np
 
 from app.state import ObservationState, render_overlay
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
+from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
 from energy.windows import WindowsBatteryReader
 from vlm.client import VLMClient, VLMConfig
 
-SCHEMA_VERSION = "0-provisional"
+SCHEMA_VERSION = CONTRACT_VERSION
+POLICY = "fixed_interval"
 WINDOW_NAME = "cap6411 baseline"
 SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
 
@@ -289,6 +292,31 @@ class JsonlWriter:
             self._file.close()
 
 
+class CsvWriter:
+    """Thread-safe append-only CSV in a contract layout (header first, flushed per row)."""
+
+    def __init__(self, path: Path, kind: str) -> None:
+        self.kind = kind
+        self._lock = threading.Lock()
+        self._file = open(path, "w", encoding="utf-8", newline="")
+        self._writer = csv.writer(self._file)
+        self._writer.writerow([f.name for f in SCHEMAS[kind]])
+        self._file.flush()
+        self.lines = 0
+
+    def write(self, record: dict) -> None:
+        with self._lock:
+            if self._file.closed:
+                return
+            self._writer.writerow(csv_row(self.kind, record))
+            self._file.flush()
+            self.lines += 1
+
+    def close(self) -> None:
+        with self._lock:
+            self._file.close()
+
+
 class LatestFrameSlot:
     """Holds only the newest frame from the capture thread; older frames are overwritten, never queued."""
 
@@ -378,9 +406,9 @@ class BaselineRun:
         else:
             self.energy_monitor = self.battery_reader = None
         self.run_dir = prepare_run_dir(config)
-        self.requests_log = JsonlWriter(self.run_dir / "requests.jsonl")
-        self.drops_log = JsonlWriter(self.run_dir / "drops.jsonl")
-        self.telemetry_log = JsonlWriter(self.run_dir / "telemetry.jsonl")
+        self.requests_log = JsonlWriter(self.run_dir / RUN_FILES["request"])
+        self.drops_log = JsonlWriter(self.run_dir / RUN_FILES["schedule"])
+        self.power_log = CsvWriter(self.run_dir / RUN_FILES["power"], "power")
         # source_factory(on_drop) lets tests inject a source wired to this run's drop log.
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
@@ -401,6 +429,8 @@ class BaselineRun:
         self.run_end_reason: Optional[str] = None
         self.error_detail: Optional[str] = None
         self.manifest: dict = {}
+        # First and last valid Windows battery report (AC/battery state for the manifest).
+        self.power_state: dict[str, Optional[dict]] = {"at_start": None, "at_end": None}
         self.times: dict[str, Optional[float]] = {
             "host_run_start_s": None,
             "host_tick_origin_s": None,
@@ -522,26 +552,95 @@ class BaselineRun:
             except Exception as exc:  # a reader bug must not end the run silently
                 batch = [
                     {
-                        "source": "telemetry",
-                        "valid": False,
-                        "value": None,
-                        "error": f"{type(exc).__name__}: {exc}",
+                        "source": "telemetry_error",
+                        "sensor_id": getattr(rows, "__name__", "telemetry"),
+                        "domain": "unknown",
+                        "quantity": "unknown",
                         "host_time_s": time.monotonic(),
+                        "valid": False,
+                        "error": f"{type(exc).__name__}: {exc}",
                     }
                 ]
             for row in batch:
-                self.telemetry_log.write(
-                    {"schema_version": SCHEMA_VERSION, **row, "run_id": self.run_id}
+                self.power_log.write(
+                    {"schema_version": SCHEMA_VERSION, "run_id": self.run_id, **row}
                 )
             next_t += interval
             self.telemetry_stop.wait(max(0.0, next_t - time.monotonic()))
 
     def _sysfs_rows(self) -> list[dict]:
-        return [{"source": "sysfs", **asdict(reading)} for reading in self.energy_monitor.sample()]
+        # Reading.elapsed_s counts from the monitor's origin; put it on the shared host clock.
+        origin = self.energy_monitor.origin_s
+        return [
+            {
+                "source": "sysfs",
+                "sensor_id": r.sensor_id,
+                "domain": r.domain,
+                "quantity": r.quantity,
+                "host_read_start_s": None,
+                "host_time_s": origin + r.elapsed_s,
+                "raw_value": r.raw_value,
+                "raw_unit": r.raw_unit,
+                "value": r.value if r.valid else None,
+                "unit": r.unit,
+                "valid": r.valid,
+                "error": r.error,
+                "ac_online": r.ac_online,
+                "battery_status": r.battery_status,
+                "quality_flags": r.quality_flags or None,
+            }
+            for r in self.energy_monitor.sample()
+        ]
 
     def _battery_rows(self) -> list[dict]:
-        # The reading's own "source" names the Windows API (also in the manifest); label the stream instead.
-        return [{**self.battery_reader.read().to_dict(), "source": "windows_battery"}]
+        """One Windows battery report as two rows: stored energy and discharge power."""
+        reading = self.battery_reader.read()
+        if reading.valid:
+            snapshot = {
+                "host_time_s": reading.available_s,
+                "ac_online": reading.ac_online,
+                "battery_status": reading.battery_status,
+                "power_supply_status": reading.power_supply_status,
+                "remaining_mwh": reading.remaining_mwh,
+                "full_mwh": reading.full_mwh,
+            }
+            if self.power_state["at_start"] is None:
+                self.power_state["at_start"] = snapshot
+            self.power_state["at_end"] = snapshot
+        common = {
+            "source": "windows_battery",
+            "domain": "whole_laptop_battery",
+            "host_read_start_s": reading.started_s,
+            "host_time_s": reading.available_s,
+            "ac_online": reading.ac_online,
+            "battery_status": reading.battery_status,
+            "quality_flags": None if reading.on_battery else "not_verified_discharging",
+        }
+        rate_ok = reading.valid and reading.charge_rate_mw is not None
+        return [
+            {
+                **common,
+                "sensor_id": "windows:aggregate:remaining_capacity",
+                "quantity": "stored_energy",
+                "raw_value": reading.remaining_mwh,
+                "raw_unit": "mWh",
+                "value": reading.energy_j if reading.valid else None,
+                "unit": "J",
+                "valid": reading.valid,
+                "error": reading.error,
+            },
+            {
+                **common,
+                "sensor_id": "windows:aggregate:charge_rate",
+                "quantity": "discharge_power",
+                "raw_value": reading.charge_rate_mw,
+                "raw_unit": "mW",
+                "value": reading.discharge_power_w if rate_ok else None,
+                "unit": "W",
+                "valid": rate_ok,
+                "error": None if rate_ok else (reading.error or "charge_rate_unavailable"),
+            },
+        ]
 
     # -- logging -----------------------------------------------------------
     def _on_source_drop(
@@ -551,6 +650,7 @@ class BaselineRun:
         self.drops_log.write(
             {
                 "schema_version": SCHEMA_VERSION,
+                "run_id": self.run_id,
                 "origin": "source",
                 "reason": reason,
                 "frame_id": frame_id,
@@ -566,6 +666,7 @@ class BaselineRun:
         self.drops_log.write(
             {
                 "schema_version": SCHEMA_VERSION,
+                "run_id": self.run_id,
                 "origin": "app",
                 "reason": reason,
                 "tick_index": tick_index,
@@ -651,7 +752,16 @@ class BaselineRun:
                     encode_start = time.monotonic()
                     jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
                     encode_s = time.monotonic() - encode_start
-                    self.in_flight = {"frame_id": frame.frame_id, "dispatched_s": time.monotonic()}
+                    self.in_flight = {
+                        "request_id": None,
+                        "tick_index": tick_index,
+                        "frame_id": frame.frame_id,
+                        "source_kind": frame.source_kind,
+                        "source_time_s": frame.source_time_s,
+                        "host_capture_s": frame.host_capture_s,
+                        "host_tick_s": next_tick,
+                        "request_started_s": time.monotonic(),
+                    }
                     self.state.record_dispatch(frame.frame_id)
                     self.jobs.put_nowait((frame, jpeg, encode_s, tick_index, next_tick))
                 # A late tick is still handled once, on the next pass; host_tick_s keeps its scheduled time.
@@ -756,7 +866,7 @@ class BaselineRun:
         (self.run_dir / "manifest.json").write_text(
             json.dumps(self.manifest, indent=2, default=str) + "\n"
         )
-        for log in (self.requests_log, self.drops_log, self.telemetry_log):
+        for log in (self.requests_log, self.drops_log, self.power_log):
             log.close()
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
 
@@ -776,6 +886,7 @@ class BaselineRun:
         return {
             "schema_version": SCHEMA_VERSION,
             "run_id": self.run_id,
+            "policy": POLICY,
             "run_dir": str(self.run_dir),
             "argv": self.argv,
             "config": {k: v for k, v in vars(self.config).items()},
@@ -793,6 +904,8 @@ class BaselineRun:
             "run_end_reason": self.run_end_reason,
             "exit_code": exit_code,
             "error_detail": self.error_detail,
+            "files": {kind: name for kind, name in RUN_FILES.items() if kind != "manifest"},
+            "power_state": self.power_state,
             "source": {"info": info, "end": self.source.end.as_dict() if self.source.end else None},
             "vlm": {
                 "config": asdict(self.client.config),
@@ -815,7 +928,7 @@ class BaselineRun:
                 **self.state.counts,
                 "frames_delivered": info["frames_delivered"],
                 "source_drops": info["drop_counts"],
-                "telemetry_samples": self.telemetry_log.lines,
+                "power_samples": self.power_log.lines,
             },
             "display": {"enabled": not self.config.no_display, "error": self.display_error},
             "threads_not_joined": [t.name for t in self.threads if t.is_alive()],
