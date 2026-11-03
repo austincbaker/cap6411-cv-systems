@@ -157,30 +157,27 @@ tasks and their GitHub issues. No webcam/event-detection implementation is inclu
 Webcam / real-time replay sources (`src/capture/`, issue #3) and the
 fixed-interval baseline app (`app/`, issue #4).
 
-### Setup and tests
-
-Dependency setup belongs to #1; until it lands, a plain venv is enough:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install opencv-python numpy pytest
-.venv/bin/python -m pytest          # run from the repo root; no webcam or model needed
-```
+Setup and tests use the same `uv sync --extra dev` environment as the rest of
+the repository (OpenCV and NumPy are declared in `pyproject.toml`). The tests in
+`tests/test_capture_sources.py` and `tests/test_app_baseline.py` need no webcam,
+model or server.
 
 ### Running the baseline
 
+Start the server first (see "Run local inference"), then:
+
 ```bash
 # replay a recording in real time, one VLM request every 2 s, headless
-python -m app.main --source replay --video clip.mp4 --interval-s 2 --no-display
+uv run python -m app.main --source replay --video clip.mp4 --interval-s 2 --no-display
 
 # webcam for 60 s with the overlay window (press q to stop)
-python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
+uv run python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
 ```
 
-Until #1 and #2 land, the defaults are `--vlm fake` and `--telemetry fake`
-(test doubles in `tests/fakes/`, synthetic values). `--vlm real` and
-`--telemetry real` exit with a "pending" error. Run `python -m app.main -h`
-for the full flag list. The flags are a stable interface for the benchmark
+The app reads the server address, model alias, output bound and timeouts from
+`--profile` (default `configs/inference.json`) and exits with code 2 before
+creating a run directory if the server does not answer. Run
+`uv run python -m app.main -h` for the full flag list. The flags are a stable interface for the benchmark
 runner (#18); change them only with a note to its owner.
 
 | Flag | Default | Meaning |
@@ -191,10 +188,12 @@ runner (#18); change them only with a note to its owner.
 | `--width/--height/--camera-fps` | | requested camera settings (observed values are recorded) |
 | `--interval-s N` | `2.0` | seconds between VLM invocations |
 | `--duration-s N` | until EOF / q / Ctrl-C | stop after N seconds |
-| `--prompt`, `--max-tokens`, `--request-timeout-s` | | request settings |
+| `--profile PATH` | `configs/inference.json` | inference profile: server address, model, bounds |
+| `--prompt`, `--max-tokens`, `--request-timeout-s` | profile values | request settings; `--max-tokens` cannot exceed the profile bound |
 | `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
-| `--vlm fake\|real`, `--telemetry fake\|real\|off`, `--telemetry-interval-s` | `fake`, `fake`, `0.5` | backends |
-| `--fake-vlm-latency-s`, `--fake-vlm-outcomes` | `0.5`, `ok` | fake client behavior, e.g. `ok,timeout,malformed,empty` |
+| `--server-idle-timeout-s` | `60` | after an uncertain timeout, end the run if the server stays busy this long |
+| `--telemetry on\|off` | `on` | sysfs and Windows battery telemetry |
+| `--telemetry-interval-s`, `--battery-interval-s` | `1`, `10` | sample intervals for sysfs and the Windows battery report |
 | `--run-dir PATH` | `runs/<UTC>_<source>/` | output directory (refuses to overwrite) |
 | `--no-display` | | headless run |
 | `--shutdown-timeout-s` | `5` | max wait for threads / in-flight request on Ctrl-C |
@@ -209,19 +208,29 @@ newest frame. At most one request is in flight; a tick that fires while one is
 running is skipped and logged as `tick_skipped_busy`. Nothing is queued.
 Capture runs on its own thread, so slow inference never slows the source.
 
+A read timeout can leave the server still working (`server_state_unknown` in
+the request record). After one, the app sends nothing until llama-server's
+`/slots` reports no busy slot; those ticks are logged as
+`tick_skipped_server_unknown`. If the server stays busy longer than
+`--server-idle-timeout-s`, the run ends with `server_not_idle` (exit 2).
+
 ### Run directory
 
 All field names are provisional until #10 (`schema_version: "0-provisional"`).
 
-- `requests.jsonl`: `request_id`, `tick_index`, `frame_id`, `source_time_s`,
-  `host_capture_s`, `host_tick_s`, `host_request_start_s`,
-  `host_response_available_s`, `duration_s`, `status`
-  (`ok|timeout|connection_error|http_error|malformed|empty|client_exception|abandoned_at_shutdown`),
-  `text` (ok only), `error_type`, `error_detail`, `usage`
+- `requests.jsonl`: the client's `InferenceResult` record (`request_id`, `status`,
+  `text`, `request_started_s`, `response_available_s`, `elapsed_s`, token counts,
+  `finish_reason`, `error`, `server_state_unknown`, ...) plus the app's `run_id`,
+  `tick_index`, integer `frame_id`, `source_kind`, `source_time_s`,
+  `host_capture_s`, `host_tick_s`, `encode_s`, `image_bytes`. The app adds the
+  statuses `client_exception` and `abandoned_at_shutdown`.
 - `drops.jsonl`: `origin` (`app` or `source`), `reason`
-  (`tick_skipped_busy`, `replay_late`, `empty_frame`, `read_failed`), `frame_id`, host times
-- `telemetry.jsonl`: one line per sensor reading; unavailable readings are
-  `valid: false, value: null`, never `0`
+  (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
+  `empty_frame`, `read_failed`), `frame_id`, host times
+- `telemetry.jsonl`: one line per reading with `source` = `sysfs`
+  (`energy.monitor.Reading` fields) or `windows_battery`
+  (`energy.windows.WindowsBatteryReading` fields). Only `windows_battery` is
+  the qualified energy source; unavailable readings are `valid: false`, never `0`
 - `manifest.json`: config, source metadata (backend, requested vs observed
   size/fps, time method), source end reason, run end reason, counts, platform
 
