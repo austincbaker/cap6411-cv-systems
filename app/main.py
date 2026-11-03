@@ -26,10 +26,17 @@ Exit codes: 0 completed (EOF, --duration-s, or 'q' in the window), 2 bad
 config / source failed to open / source ended in error, 130 interrupted,
 1 unexpected application error.
 
-The VLM client (#1) and telemetry monitor (#2) are not implemented yet; the
-``InferenceClient`` and ``TelemetryMonitor`` protocols below define what this
-app expects, and ``--vlm fake`` / ``--telemetry fake`` use test doubles from
-``tests/fakes`` (run from the repository root).
+Inference uses ``vlm.client.VLMClient`` against an already running
+llama-server configured by ``--profile`` (default ``configs/inference.json``;
+start it with ``scripts/llama_runtime.py serve``). The app checks the server
+before creating a run directory. After a request whose server-side state is
+unknown (a read timeout), no new request is sent until the server reports no
+busy slot; ticks in between are logged as ``tick_skipped_server_unknown``.
+
+Telemetry (``--telemetry on``) logs two sources, each row labeled with its
+``source``: Linux sysfs readings from ``energy.monitor.EnergyMonitor`` and the
+Windows battery report from ``energy.windows.WindowsBatteryReader`` (the
+qualified whole-laptop source on the WSL2 platform; unavailable elsewhere).
 """
 
 from __future__ import annotations
@@ -44,60 +51,23 @@ import threading
 import time
 import traceback
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional, Protocol, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import cv2
+import httpx
 import numpy as np
 
 from app.state import ObservationState, render_overlay
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
+from energy.monitor import EnergyMonitor
+from energy.windows import WindowsBatteryReader
+from vlm.client import VLMClient, VLMConfig
 
 SCHEMA_VERSION = "0-provisional"
 WINDOW_NAME = "cap6411 baseline"
-FAKE_OUTCOMES = ("ok", "timeout", "connection_error", "http_error", "malformed", "empty", "ok_blank", "raise")
-
-
-# ============================================================================ interfaces
-# Austin's real implementations (#1 src/vlm/client.py, #2 src/energy/monitor.py)
-# only need to match these shapes; nothing has to inherit from them.
-
-
-@dataclass
-class InferenceResult:
-    """What ``InferenceClient.describe`` returns.
-
-    status: "ok" | "timeout" | "connection_error" | "http_error" | "malformed" | "empty".
-    The app adds "client_exception" (describe raised) and "abandoned_at_shutdown".
-    usage stays None when the server reports no token/timing statistics.
-    """
-
-    status: str
-    text: Optional[str] = None
-    error_type: Optional[str] = None
-    error_detail: Optional[str] = None
-    usage: Optional[dict] = None
-
-
-class InferenceClient(Protocol):
-    def describe(
-        self, *, image_jpeg: bytes, prompt: str, max_tokens: int, frame_id: int, request_id: str
-    ) -> InferenceResult: ...
-
-    def close(self) -> None: ...
-
-
-class TelemetryMonitor(Protocol):
-    """``sample()`` returns one dict per sensor reading, e.g.
-    {sensor_id, domain, quantity, raw_value, raw_unit, value, unit, host_time_s, valid, error}.
-    An unavailable sensor reports valid=False with value None, never 0."""
-
-    def metadata(self) -> dict: ...
-
-    def sample(self) -> list[dict]: ...
-
-    def close(self) -> None: ...
+SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
 
 
 # ============================================================================ CLI
@@ -132,40 +102,91 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m app.main",
         description="Fixed-interval VLM baseline over a webcam or real-time video replay.",
+        allow_abbrev=False,
     )
     src = parser.add_argument_group("source")
     src.add_argument("--source", choices=("webcam", "replay"), required=True)
     src.add_argument("--video", help="video file for --source replay")
-    src.add_argument("--device", default="0", help="camera index or device path for --source webcam (default 0)")
-    src.add_argument("--width", type=positive_int, help="requested camera width (observed value is recorded)")
-    src.add_argument("--height", type=positive_int, help="requested camera height (observed value is recorded)")
-    src.add_argument("--camera-fps", type=positive_float, help="requested camera fps (observed value is recorded)")
+    src.add_argument(
+        "--device", default="0", help="camera index or device path for --source webcam (default 0)"
+    )
+    src.add_argument(
+        "--width", type=positive_int, help="requested camera width (observed value is recorded)"
+    )
+    src.add_argument(
+        "--height", type=positive_int, help="requested camera height (observed value is recorded)"
+    )
+    src.add_argument(
+        "--camera-fps",
+        type=positive_float,
+        help="requested camera fps (observed value is recorded)",
+    )
 
     sched = parser.add_argument_group("schedule")
-    sched.add_argument("--interval-s", type=positive_float, default=2.0, help="seconds between VLM invocations (default 2)")
-    sched.add_argument("--duration-s", type=positive_float, help="stop after this many seconds (default: until EOF / q / Ctrl-C)")
+    sched.add_argument(
+        "--interval-s",
+        type=positive_float,
+        default=2.0,
+        help="seconds between VLM invocations (default 2)",
+    )
+    sched.add_argument(
+        "--duration-s",
+        type=positive_float,
+        help="stop after this many seconds (default: until EOF / q / Ctrl-C)",
+    )
 
     req = parser.add_argument_group("request")
-    req.add_argument("--prompt", default="Describe the scene in one short sentence.")
-    req.add_argument("--max-tokens", type=positive_int, default=64)
-    req.add_argument("--request-timeout-s", type=positive_float, default=30.0)
+    req.add_argument(
+        "--profile",
+        default="configs/inference.json",
+        help="inference profile (default configs/inference.json)",
+    )
+    req.add_argument("--prompt", default="Describe the visible objects in one short sentence.")
+    req.add_argument(
+        "--max-tokens",
+        type=positive_int,
+        help="output bound per request (default and maximum: the profile's)",
+    )
+    req.add_argument(
+        "--request-timeout-s",
+        type=positive_float,
+        help="read timeout per request (default: the profile's)",
+    )
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
+    req.add_argument(
+        "--server-idle-timeout-s",
+        type=positive_float,
+        default=60.0,
+        help="after an uncertain timeout, end the run if the server is not idle within this time (default 60)",
+    )
 
-    back = parser.add_argument_group("backends")
-    back.add_argument("--vlm", choices=("fake", "real"), default="fake", help="'real' requires #1 (src/vlm/client.py)")
-    back.add_argument("--telemetry", choices=("fake", "real", "off"), default="fake", help="'real' requires #2 (src/energy/monitor.py)")
-    back.add_argument("--telemetry-interval-s", type=positive_float, default=0.5)
-    back.add_argument("--fake-vlm-latency-s", type=nonnegative_float, default=0.5, help="fake client latency per request")
-    back.add_argument(
-        "--fake-vlm-outcomes",
-        default="ok",
-        help=f"comma-separated outcomes the fake client cycles through: {','.join(FAKE_OUTCOMES)}",
+    tel = parser.add_argument_group("telemetry")
+    tel.add_argument("--telemetry", choices=("on", "off"), default="on")
+    tel.add_argument(
+        "--telemetry-interval-s",
+        type=positive_float,
+        default=1.0,
+        help="sysfs sample interval (default 1)",
+    )
+    tel.add_argument(
+        "--battery-interval-s",
+        type=positive_float,
+        default=10.0,
+        help="Windows battery report interval (default 10; the report itself updates every ~30-40 s)",
     )
 
     out = parser.add_argument_group("output")
-    out.add_argument("--run-dir", help="output directory (default runs/<UTC time>_<source>/); must not already contain files")
+    out.add_argument(
+        "--run-dir",
+        help="output directory (default runs/<UTC time>_<source>/); must not already contain files",
+    )
     out.add_argument("--no-display", action="store_true", help="headless: no OpenCV window")
-    out.add_argument("--shutdown-timeout-s", type=nonnegative_float, default=5.0, help="max wait for threads/in-flight request when interrupted")
+    out.add_argument(
+        "--shutdown-timeout-s",
+        type=nonnegative_float,
+        default=5.0,
+        help="max wait for threads/in-flight request when interrupted",
+    )
     return parser
 
 
@@ -176,11 +197,6 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--source replay requires --video PATH")
     if args.source == "webcam" and args.video:
         parser.error("--video is only valid with --source replay")
-    outcomes = [o.strip() for o in args.fake_vlm_outcomes.split(",") if o.strip()]
-    unknown = sorted(set(outcomes) - set(FAKE_OUTCOMES))
-    if not outcomes or unknown:
-        parser.error(f"--fake-vlm-outcomes: unknown outcome(s) {unknown}; choose from {','.join(FAKE_OUTCOMES)}")
-    args.fake_vlm_outcomes = outcomes
     return args
 
 
@@ -191,34 +207,60 @@ def build_source(config: argparse.Namespace, on_drop) -> SourceBase:
     if config.source == "replay":
         return ReplaySource(config.video, on_drop=on_drop)
     return WebcamSource(
-        config.device, width=config.width, height=config.height, fps=config.camera_fps, on_drop=on_drop
+        config.device,
+        width=config.width,
+        height=config.height,
+        fps=config.camera_fps,
+        on_drop=on_drop,
     )
 
 
-def build_client(config: argparse.Namespace) -> InferenceClient:
-    if config.vlm == "real":
-        raise ConfigError("--vlm real is pending #1 (src/vlm/client.py has not landed); use --vlm fake")
+def load_vlm_config(config: argparse.Namespace) -> VLMConfig:
+    """VLMConfig from the inference profile, with the CLI's timeout override."""
     try:
-        from tests.fakes.fake_vlm import FakeVLMClient
-    except ImportError as exc:
-        raise ConfigError(f"--vlm fake needs tests/fakes on the import path; run from the repo root ({exc})")
-    return FakeVLMClient(
-        latency_s=config.fake_vlm_latency_s,
-        outcomes=config.fake_vlm_outcomes,
-        timeout_s=config.request_timeout_s,
+        profile = json.loads(Path(config.profile).read_text())
+        vlm = VLMConfig(
+            base_url=f"http://{profile['host']}:{profile['port']}",
+            model=profile["model_alias"],
+            max_output_tokens=profile["max_output_tokens"],
+            connect_timeout_s=profile["connect_timeout_s"],
+            read_timeout_s=config.request_timeout_s or profile["read_timeout_s"],
+        )
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ConfigError(
+            f"cannot load inference profile {config.profile}: {type(exc).__name__}: {exc}"
+        )
+    if config.max_tokens is not None and config.max_tokens > vlm.max_output_tokens:
+        raise ConfigError(
+            f"--max-tokens {config.max_tokens} exceeds the profile bound {vlm.max_output_tokens}"
+        )
+    return vlm
+
+
+def check_server(client: VLMClient) -> dict:
+    """The running server's identity; ConfigError if it does not answer."""
+    try:
+        props = client.server_properties()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ConfigError(
+            f"no ready llama-server at {client.config.base_url} ({type(exc).__name__}); "
+            "start it with `uv run python scripts/llama_runtime.py serve`"
+        )
+    return {key: props.get(key) for key in SERVER_PROPERTY_KEYS}
+
+
+def server_is_idle(base_url: str) -> bool:
+    """True only when llama-server's /slots reports no slot processing."""
+    try:
+        response = httpx.get(base_url.rstrip("/") + "/slots", timeout=2.0, trust_env=False)
+        slots = response.json() if response.is_success else None
+    except (httpx.HTTPError, ValueError):
+        return False
+    return (
+        isinstance(slots, list)
+        and bool(slots)
+        and not any(isinstance(slot, dict) and slot.get("is_processing") for slot in slots)
     )
-
-
-def build_telemetry(config: argparse.Namespace) -> Optional[TelemetryMonitor]:
-    if config.telemetry == "off":
-        return None
-    if config.telemetry == "real":
-        raise ConfigError("--telemetry real is pending #2 (src/energy/monitor.py has not landed); use fake or off")
-    try:
-        from tests.fakes.fake_telemetry import FakeTelemetry
-    except ImportError as exc:
-        raise ConfigError(f"--telemetry fake needs tests/fakes on the import path; run from the repo root ({exc})")
-    return FakeTelemetry()
 
 
 # ============================================================================ plumbing
@@ -308,15 +350,33 @@ class BaselineRun:
         config: argparse.Namespace,
         *,
         source_factory: Optional[Callable[..., SourceBase]] = None,
-        client: Optional[InferenceClient] = None,
-        telemetry: Optional[TelemetryMonitor] = None,
+        client: Optional[VLMClient] = None,
+        energy_monitor: Optional[EnergyMonitor] = None,
+        battery_reader: Optional[WindowsBatteryReader] = None,
+        server_idle: Optional[Callable[[], bool]] = None,
         argv: Optional[Sequence[str]] = None,
     ) -> None:
         self.config = config
         self.argv = list(argv) if argv is not None else None
-        # Build backends before touching the filesystem so config errors leave nothing behind.
-        self.client = client if client is not None else build_client(config)
-        self.telemetry = telemetry if telemetry is not None or config.telemetry == "off" else build_telemetry(config)
+        self.run_id = uuid.uuid4().hex
+        # Check the backends before touching the filesystem so config errors leave nothing behind.
+        self.client = client if client is not None else VLMClient(load_vlm_config(config))
+        self.max_tokens = config.max_tokens or self.client.config.max_output_tokens
+        if self.max_tokens > self.client.config.max_output_tokens:
+            raise ConfigError(
+                f"--max-tokens {self.max_tokens} exceeds the client bound {self.client.config.max_output_tokens}"
+            )
+        try:
+            self.server_properties = check_server(self.client)
+        except ConfigError:
+            self.client.close()
+            raise
+        self.server_idle = server_idle or (lambda: server_is_idle(self.client.config.base_url))
+        if config.telemetry == "on":
+            self.energy_monitor = energy_monitor or EnergyMonitor(run_id=self.run_id)
+            self.battery_reader = battery_reader or WindowsBatteryReader()
+        else:
+            self.energy_monitor = self.battery_reader = None
         self.run_dir = prepare_run_dir(config)
         self.requests_log = JsonlWriter(self.run_dir / "requests.jsonl")
         self.drops_log = JsonlWriter(self.run_dir / "drops.jsonl")
@@ -332,6 +392,9 @@ class BaselineRun:
         self.threads: list[threading.Thread] = []
         self.capture_thread: Optional[threading.Thread] = None
         self.in_flight: Optional[dict] = None
+        self.server_unknown_since: Optional[float] = (
+            None  # set after a request with server_state_unknown
+        )
         self.client_closed = False
         self.display = not config.no_display
         self.display_error: Optional[str] = None
@@ -376,8 +439,16 @@ class BaselineRun:
     def _start_threads(self) -> None:
         self.capture_thread = self._spawn("capture", self._capture_loop)
         self._spawn("inference", self._inference_loop)
-        if self.telemetry is not None:
-            self._spawn("telemetry", self._telemetry_loop)
+        if self.energy_monitor is not None:
+            self._spawn(
+                "telemetry-sysfs",
+                lambda: self._telemetry_loop(self.config.telemetry_interval_s, self._sysfs_rows),
+            )
+        if self.battery_reader is not None:
+            self._spawn(
+                "telemetry-battery",
+                lambda: self._telemetry_loop(self.config.battery_interval_s, self._battery_rows),
+            )
 
     def _spawn(self, name: str, target: Callable[[], None]) -> threading.Thread:
         # daemon=True only as a last resort if a client ignores its timeout; shutdown always joins.
@@ -403,90 +474,123 @@ class BaselineRun:
                 return
             self.results.put(self._execute(*job))
 
-    def _execute(self, frame: Frame, jpeg: bytes, encode_s: float, request_id: str, tick_index: int,
-                 host_tick_s: float) -> dict:
-        record = {
+    def _execute(
+        self, frame: Frame, jpeg: bytes, encode_s: float, tick_index: int, host_tick_s: float
+    ) -> dict:
+        app_fields = {
             "schema_version": SCHEMA_VERSION,
-            "request_id": request_id,
+            "run_id": self.run_id,
             "tick_index": tick_index,
             "frame_id": frame.frame_id,
             "source_kind": frame.source_kind,
             "source_time_s": frame.source_time_s,
             "host_capture_s": frame.host_capture_s,
             "host_tick_s": host_tick_s,
+            "encode_s": encode_s,
+            "image_bytes": len(jpeg),
         }
-        host_request_start_s = time.monotonic()
+        started = time.monotonic()
         try:
-            result = self.client.describe(
-                image_jpeg=jpeg,
+            result = self.client.infer(
+                jpeg,
+                frame_id=str(frame.frame_id),
                 prompt=self.config.prompt,
-                max_tokens=self.config.max_tokens,
-                frame_id=frame.frame_id,
-                request_id=request_id,
+                source_id=self.source.source_id,
+                source_time_s=frame.source_time_s,
+                max_tokens=self.max_tokens,
             )
-            status = str(getattr(result, "status", None))
-            text = getattr(result, "text", None)
-            error_type = getattr(result, "error_type", None)
-            error_detail = getattr(result, "error_detail", None)
-            usage = getattr(result, "usage", None)
-        except Exception as exc:
-            status, text, usage = "client_exception", None, None
-            error_type, error_detail = type(exc).__name__, str(exc)
-        host_response_available_s = time.monotonic()
-        if status == "ok" and not (isinstance(text, str) and text.strip()):
-            status, error_type, error_detail = "empty", error_type or "blank_text", "status ok but no text"
-        record.update(
-            host_request_start_s=host_request_start_s,
-            host_response_available_s=host_response_available_s,
-            duration_s=host_response_available_s - host_request_start_s,
-            encode_s=encode_s,
-            image_bytes=len(jpeg),
-            status=status,
-            text=text if status == "ok" else None,
-            error_type=None if status == "ok" else (error_type or status),
-            error_detail=None if status == "ok" else error_detail,
-            usage=usage,
-        )
-        return record
+        except Exception as exc:  # local validation or a client bug: visible, never retried
+            ended = time.monotonic()
+            return {
+                **app_fields,
+                "status": "client_exception",
+                "text": None,
+                "error": f"{type(exc).__name__}: {exc}",
+                "request_id": None,
+                "request_started_s": started,
+                "response_available_s": ended,
+                "elapsed_s": ended - started,
+                "server_state_unknown": False,
+            }
+        return {**result.to_dict(), **app_fields}
 
-    def _telemetry_loop(self) -> None:
-        interval = self.config.telemetry_interval_s
+    def _telemetry_loop(self, interval: float, rows: Callable[[], list[dict]]) -> None:
         next_t = time.monotonic()
         while not self.telemetry_stop.is_set():
             try:
-                samples = list(self.telemetry.sample())
-            except Exception as exc:
-                samples = [{"valid": False, "value": None, "error": f"{type(exc).__name__}: {exc}", "host_time_s": time.monotonic()}]
-            for sample in samples:
-                self.telemetry_log.write({"schema_version": SCHEMA_VERSION, **sample})
+                batch = rows()
+            except Exception as exc:  # a reader bug must not end the run silently
+                batch = [
+                    {
+                        "source": "telemetry",
+                        "valid": False,
+                        "value": None,
+                        "error": f"{type(exc).__name__}: {exc}",
+                        "host_time_s": time.monotonic(),
+                    }
+                ]
+            for row in batch:
+                self.telemetry_log.write(
+                    {"schema_version": SCHEMA_VERSION, **row, "run_id": self.run_id}
+                )
             next_t += interval
             self.telemetry_stop.wait(max(0.0, next_t - time.monotonic()))
 
-    # -- logging -----------------------------------------------------------
-    def _on_source_drop(self, frame_id: int, reason: str, host_time_s: float, detail: str = "") -> None:
-        # Called on the capture thread.
-        self.drops_log.write({
-            "schema_version": SCHEMA_VERSION, "origin": "source", "reason": reason,
-            "frame_id": frame_id, "host_time_s": host_time_s, "detail": detail,
-        })
+    def _sysfs_rows(self) -> list[dict]:
+        return [{"source": "sysfs", **asdict(reading)} for reading in self.energy_monitor.sample()]
 
-    def _log_tick_drop(self, reason: str, tick_index: int, host_tick_s: float, frame: Frame, **extra: Any) -> None:
+    def _battery_rows(self) -> list[dict]:
+        # The reading's own "source" names the Windows API (also in the manifest); label the stream instead.
+        return [{**self.battery_reader.read().to_dict(), "source": "windows_battery"}]
+
+    # -- logging -----------------------------------------------------------
+    def _on_source_drop(
+        self, frame_id: int, reason: str, host_time_s: float, detail: str = ""
+    ) -> None:
+        # Called on the capture thread.
+        self.drops_log.write(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "origin": "source",
+                "reason": reason,
+                "frame_id": frame_id,
+                "host_time_s": host_time_s,
+                "detail": detail,
+            }
+        )
+
+    def _log_tick_drop(
+        self, reason: str, tick_index: int, host_tick_s: float, frame: Frame, **extra: Any
+    ) -> None:
         self.state.bump(reason)
-        self.drops_log.write({
-            "schema_version": SCHEMA_VERSION, "origin": "app", "reason": reason,
-            "tick_index": tick_index, "host_tick_s": host_tick_s, "host_time_s": time.monotonic(),
-            "frame_id": frame.frame_id, "source_time_s": frame.source_time_s,
-            **extra,
-        })
+        self.drops_log.write(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "origin": "app",
+                "reason": reason,
+                "tick_index": tick_index,
+                "host_tick_s": host_tick_s,
+                "host_time_s": time.monotonic(),
+                "frame_id": frame.frame_id,
+                "source_time_s": frame.source_time_s,
+                **extra,
+            }
+        )
 
     def _handle_result(self, record: dict) -> None:
         self.requests_log.write(record)
         self.state.record_result(
-            status=record["status"], text=record["text"], error_type=record["error_type"],
-            request_id=record["request_id"], frame_id=record["frame_id"],
-            source_time_s=record["source_time_s"], host_capture_s=record["host_capture_s"],
-            host_response_available_s=record["host_response_available_s"],
+            status=record["status"],
+            text=record["text"],
+            error_type=record.get("error"),
+            request_id=record["request_id"],
+            frame_id=record["frame_id"],
+            source_time_s=record["source_time_s"],
+            host_capture_s=record["host_capture_s"],
+            host_response_available_s=record["response_available_s"],
         )
+        if record.get("server_state_unknown") and self.server_unknown_since is None:
+            self.server_unknown_since = time.monotonic()
         self.in_flight = None
 
     def _drain_results(self, timeout: float = 0.0) -> None:
@@ -527,18 +631,29 @@ class BaselineRun:
                 frame = self.slot.latest()
                 if self.in_flight is not None:
                     self._log_tick_drop(
-                        "tick_skipped_busy", tick_index, next_tick, frame,
-                        in_flight_request_id=self.in_flight["request_id"],
+                        "tick_skipped_busy",
+                        tick_index,
+                        next_tick,
+                        frame,
                         in_flight_frame_id=self.in_flight["frame_id"],
                     )
+                elif self.server_unknown_since is not None and not self.server_idle():
+                    self._log_tick_drop("tick_skipped_server_unknown", tick_index, next_tick, frame)
+                    if now - self.server_unknown_since > self.config.server_idle_timeout_s:
+                        self.run_end_reason = "server_not_idle"
+                        self.error_detail = (
+                            f"llama-server not idle {self.config.server_idle_timeout_s} s "
+                            "after a request with unknown server state"
+                        )
+                        self.source.stop()
                 else:
+                    self.server_unknown_since = None
                     encode_start = time.monotonic()
                     jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
                     encode_s = time.monotonic() - encode_start
-                    request_id = uuid.uuid4().hex[:12]
-                    self.in_flight = {"request_id": request_id, "frame_id": frame.frame_id}
+                    self.in_flight = {"frame_id": frame.frame_id, "dispatched_s": time.monotonic()}
                     self.state.record_dispatch(frame.frame_id)
-                    self.jobs.put_nowait((frame, jpeg, encode_s, request_id, tick_index, next_tick))
+                    self.jobs.put_nowait((frame, jpeg, encode_s, tick_index, next_tick))
                 # A late tick is still handled once, on the next pass; host_tick_s keeps its scheduled time.
                 tick_index += 1
                 next_tick = tick_origin + tick_index * interval
@@ -555,12 +670,17 @@ class BaselineRun:
         if frame is None:
             return
         try:
-            cv2.imshow(WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(time.monotonic())))
+            cv2.imshow(
+                WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(time.monotonic()))
+            )
             key = cv2.waitKey(1) & 0xFF
         except cv2.error as exc:
             self.display = False
             self.display_error = str(exc).strip()
-            print(f"warning: display failed ({self.display_error}); continuing headless", file=sys.stderr)
+            print(
+                f"warning: display failed ({self.display_error}); continuing headless",
+                file=sys.stderr,
+            )
             return
         if key in (ord("q"), 27) and self.run_end_reason is None:
             self.run_end_reason = "user_quit"
@@ -579,6 +699,8 @@ class BaselineRun:
         if end.reason.is_error:
             self.run_end_reason = end.reason.value
             return 2
+        if self.run_end_reason == "server_not_idle":
+            return 2
         if self.run_end_reason is None:  # not already "user_quit" or "duration_limit"
             self.run_end_reason = end.reason.value
         return 0
@@ -595,15 +717,23 @@ class BaselineRun:
             self.source.close()  # normally already closed by the capture thread's `with`
 
         if self.in_flight is not None:
-            wait = grace if interrupted else self.config.request_timeout_s + grace
+            wait = grace if interrupted else self.client.config.read_timeout_s + grace
             deadline = time.monotonic() + wait
             while self.in_flight is not None and time.monotonic() < deadline:
                 self._drain_results(timeout=min(0.05, max(0.0, deadline - time.monotonic())))
         if self.in_flight is not None:
-            self.requests_log.write({
-                "schema_version": SCHEMA_VERSION, **self.in_flight, "status": "abandoned_at_shutdown",
-                "host_response_available_s": None, "text": None, "error_type": "abandoned_at_shutdown",
-            })
+            self.requests_log.write(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": self.run_id,
+                    **self.in_flight,
+                    "status": "abandoned_at_shutdown",
+                    "response_available_s": None,
+                    "text": None,
+                    "error": "abandoned_at_shutdown",
+                    "server_state_unknown": True,
+                }
+            )
             self.state.bump("status:abandoned_at_shutdown")
             self.in_flight = None
         try:
@@ -614,11 +744,6 @@ class BaselineRun:
         for thread in self.threads:
             thread.join(grace)
         self._close_client()
-        if self.telemetry is not None:
-            try:
-                self.telemetry.close()
-            except Exception:
-                pass
         if not self.config.no_display:
             try:
                 cv2.destroyAllWindows()
@@ -628,7 +753,9 @@ class BaselineRun:
 
         self.times["host_run_end_s"] = time.monotonic()
         self.manifest = self._build_manifest(exit_code)
-        (self.run_dir / "manifest.json").write_text(json.dumps(self.manifest, indent=2, default=str) + "\n")
+        (self.run_dir / "manifest.json").write_text(
+            json.dumps(self.manifest, indent=2, default=str) + "\n"
+        )
         for log in (self.requests_log, self.drops_log, self.telemetry_log):
             log.close()
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
@@ -648,6 +775,7 @@ class BaselineRun:
         end = self.times["host_run_end_s"]
         return {
             "schema_version": SCHEMA_VERSION,
+            "run_id": self.run_id,
             "run_dir": str(self.run_dir),
             "argv": self.argv,
             "config": {k: v for k, v in vars(self.config).items()},
@@ -656,15 +784,32 @@ class BaselineRun:
                 "host_*": "time.monotonic() seconds in this process",
                 "source_time_s": "media-relative seconds (replay); null for webcam",
             },
-            "times": {**self.times, "observed_duration_s": (end - start) if start is not None and end is not None else None},
+            "times": {
+                **self.times,
+                "observed_duration_s": (end - start)
+                if start is not None and end is not None
+                else None,
+            },
             "run_end_reason": self.run_end_reason,
             "exit_code": exit_code,
             "error_detail": self.error_detail,
             "source": {"info": info, "end": self.source.end.as_dict() if self.source.end else None},
-            "vlm": {"kind": self.config.vlm, "metadata": _safe_metadata(self.client)},
+            "vlm": {
+                "config": asdict(self.client.config),
+                "max_tokens": self.max_tokens,
+                "server_properties": self.server_properties,
+            },
             "telemetry": (
-                {"kind": "off"} if self.telemetry is None
-                else {"kind": self.config.telemetry, "interval_s": self.config.telemetry_interval_s, "metadata": _safe_metadata(self.telemetry)}
+                {"enabled": False}
+                if self.energy_monitor is None
+                else {
+                    "enabled": True,
+                    "sysfs_interval_s": self.config.telemetry_interval_s,
+                    "sysfs_inventory": self.energy_monitor.inventory(),
+                    "battery_interval_s": self.config.battery_interval_s,
+                    "battery_source": "Windows.Devices.Power.BatteryReport",
+                    "battery_reader_executable": self.battery_reader.executable,
+                }
             ),
             "counts": {
                 **self.state.counts,
@@ -683,16 +828,6 @@ class BaselineRun:
                 "numpy": np.__version__,
             },
         }
-
-
-def _safe_metadata(obj: Any) -> Optional[dict]:
-    meta = getattr(obj, "metadata", None)
-    if not callable(meta):
-        return None
-    try:
-        return meta()
-    except Exception as exc:
-        return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
