@@ -7,7 +7,11 @@ name = "always-on-vlm"
 version = "0.1.0"
 description = "Local VLM inference and Linux energy telemetry for the CAP6411 project"
 requires-python = ">=3.10"
-dependencies = ["httpx==0.28.1"]
+dependencies = [
+    "httpx==0.28.1",
+    "numpy>=1.26",
+    "opencv-python>=4.10",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3,<9", "ruff>=0.11,<0.12"]
