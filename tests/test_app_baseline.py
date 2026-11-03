@@ -15,7 +15,7 @@ import pytest
 
 from app.main import BaselineRun, main, parse_args
 from app.state import ObservationState, render_overlay
-from src.capture import EndReason, ReplaySource, WebcamSource
+from capture import EndReason, ReplaySource, WebcamSource
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
 from tests.fakes.fake_telemetry import FakeTelemetry
 from tests.fakes.fake_vlm import FakeVLMClient

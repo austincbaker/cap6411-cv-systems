@@ -52,7 +52,7 @@ import cv2
 import numpy as np
 
 from app.state import ObservationState, render_overlay
-from src.capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
+from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
 
 SCHEMA_VERSION = "0-provisional"
 WINDOW_NAME = "cap6411 baseline"

@@ -2,7 +2,7 @@
 
 Typical use::
 
-    from src.capture import ReplaySource, SourceOpenError
+    from capture import ReplaySource, SourceOpenError
 
     with ReplaySource("clip.mp4") as source:
         for frame in source:
