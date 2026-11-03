@@ -114,8 +114,10 @@ class ReplaySource(SourceBase):
         has_second = bool(ok) and not frame_is_empty(second)
         t1_ms = _finite_or_none(capture.get(cv2.CAP_PROP_POS_MSEC)) if has_second else None
 
-        media_ok = t0_ms is not None and t0_ms >= 0 and (
-            not has_second or (t1_ms is not None and t1_ms > t0_ms)
+        media_ok = (
+            t0_ms is not None
+            and t0_ms >= 0
+            and (not has_second or (t1_ms is not None and t1_ms > t0_ms))
         )
         if media_ok:
             self._use_media_time = True
@@ -253,7 +255,9 @@ class ReplaySource(SourceBase):
                 f"stream ended after {seen} of {expected} reported frames",
                 complete=False,
             )
-        return self._finish(EndReason.EOF, f"end of stream after {seen} of {expected} frames", complete=True)
+        return self._finish(
+            EndReason.EOF, f"end of stream after {seen} of {expected} frames", complete=True
+        )
 
 
 def _finite_or_none(value: Any) -> Optional[float]:
@@ -262,4 +266,3 @@ def _finite_or_none(value: Any) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) else None
-

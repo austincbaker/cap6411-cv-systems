@@ -51,7 +51,9 @@ class FakeVideoCapture:
         self.height = height
         self.accept_settings = accept_settings
         self.close_after = close_after
-        self.read_delay_s = read_delay_s  # real sleep per read(), to mimic a camera's frame interval
+        self.read_delay_s = (
+            read_delay_s  # real sleep per read(), to mimic a camera's frame interval
+        )
         self.released = False
         self.set_calls: list[tuple[int, float]] = []
         self.grabs = 0

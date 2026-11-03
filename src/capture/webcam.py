@@ -69,7 +69,9 @@ class WebcamSource(SourceBase):
         capture_factory: Callable[..., Any] = cv2.VideoCapture,
     ) -> None:
         self.device = parse_device(device)
-        super().__init__(str(self.device), clock=clock, on_drop=on_drop, capture_factory=capture_factory)
+        super().__init__(
+            str(self.device), clock=clock, on_drop=on_drop, capture_factory=capture_factory
+        )
         if max_consecutive_failures < 1:
             raise ValueError("max_consecutive_failures must be >= 1")
         self.requested_width = width
@@ -90,7 +92,9 @@ class WebcamSource(SourceBase):
         capture = self._capture_factory(self.device, self.api_preference)
         if capture is None or not capture.isOpened():
             release_quietly(capture)
-            raise SourceOpenError(f"could not open camera {self.device!r} (missing device or no permission)")
+            raise SourceOpenError(
+                f"could not open camera {self.device!r} (missing device or no permission)"
+            )
         self._capture = capture
 
         if self.requested_width:
@@ -116,7 +120,9 @@ class WebcamSource(SourceBase):
         if self.requested_width and info.observed_width != self.requested_width:
             info.notes.append(f"requested width {self.requested_width}, got {info.observed_width}")
         if self.requested_height and info.observed_height != self.requested_height:
-            info.notes.append(f"requested height {self.requested_height}, got {info.observed_height}")
+            info.notes.append(
+                f"requested height {self.requested_height}, got {info.observed_height}"
+            )
         self._pending_first = image
         self._consecutive_failures = 0
 
@@ -137,10 +143,11 @@ class WebcamSource(SourceBase):
                 self._consecutive_failures = 0
                 return self._deliver(frame_id, image, None)
             self._consecutive_failures += 1
-            self._record_drop(frame_id, "read_failed", "empty frame" if ok else "read() returned False")
+            self._record_drop(
+                frame_id, "read_failed", "empty frame" if ok else "read() returned False"
+            )
             if self._consecutive_failures >= self.max_consecutive_failures:
                 return self._finish(
                     EndReason.DISCONNECTED,
                     f"{self._consecutive_failures} consecutive failed reads",
                 )
-
