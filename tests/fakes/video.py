@@ -8,7 +8,9 @@ import cv2
 import numpy as np
 
 
-def write_test_video(path: Path, *, frames: int = 20, fps: float = 10.0, width: int = 64, height: int = 48) -> Path:
+def write_test_video(
+    path: Path, *, frames: int = 20, fps: float = 10.0, width: int = 64, height: int = 48
+) -> Path:
     """Write an MJPG .avi whose frame i has mean brightness ~ (i * 10) % 256 and a moving box."""
     path = Path(path)
     writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), fps, (width, height))

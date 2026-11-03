@@ -95,8 +95,19 @@ def render_overlay(image: np.ndarray, lines: list[str], max_chars: int = 90) -> 
     y = 22
     for line in lines:
         for chunk in _wrap(line, max_chars):
-            cv2.putText(canvas, chunk, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3, cv2.LINE_AA)
-            cv2.putText(canvas, chunk, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(
+                canvas, chunk, (8, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 3, cv2.LINE_AA
+            )
+            cv2.putText(
+                canvas,
+                chunk,
+                (8, y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
             y += 20
     return canvas
 

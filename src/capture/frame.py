@@ -83,7 +83,9 @@ class SourceInfo:
     source_kind: str
     source_id: str
     backend: Optional[str] = None
-    time_method: Optional[str] = None  # "media_pos_msec" | "frame_index_over_fps" | "none_host_capture_only"
+    time_method: Optional[str] = (
+        None  # "media_pos_msec" | "frame_index_over_fps" | "none_host_capture_only"
+    )
     cfr_assumed: bool = False  # True when source time is frame_index / fps
     reported_fps: Optional[float] = None  # CAP_PROP_FPS after open; None if missing or invalid
     reported_frame_count: Optional[int] = None
