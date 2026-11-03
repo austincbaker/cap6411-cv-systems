@@ -9,7 +9,7 @@ import time
 import cv2
 import pytest
 
-from src.capture import EndReason, ReplaySource, SourceOpenError, WebcamSource
+from capture import EndReason, ReplaySource, SourceOpenError, WebcamSource
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
 from tests.fakes.fake_clock import FakeClock
 from tests.fakes.video import write_test_video

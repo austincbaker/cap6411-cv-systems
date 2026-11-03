@@ -242,7 +242,7 @@ Frame IDs are the decode index, so they are the same on every replay.
 ### Using a source directly
 
 ```python
-from src.capture import ReplaySource, WebcamSource
+from capture import ReplaySource, WebcamSource
 
 with ReplaySource("clip.mp4") as source:          # or WebcamSource(0)
     for frame in source:                          # frame.image is HxWx3 uint8 BGR
