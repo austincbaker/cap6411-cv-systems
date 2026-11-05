@@ -1,0 +1,110 @@
+{
+  "schema_version": "0-provisional",
+  "run_id": "0000000000000000000000000000002d",
+  "policy": "fixed_interval",
+  "run_dir": "runs/20261103T170000Z_replay",
+  "argv": [
+    "--source",
+    "replay",
+    "--video",
+    "data/local/pilot-desk-01.mp4",
+    "--interval-s",
+    "2",
+    "--no-display"
+  ],
+  "config": {
+    "source": "replay",
+    "video": "data/local/pilot-desk-01.mp4",
+    "interval_s": 2.0,
+    "duration_s": null,
+    "profile": "configs/inference.json",
+    "max_tokens": null,
+    "request_timeout_s": 4.0,
+    "telemetry": "on",
+    "telemetry_interval_s": 1.0,
+    "battery_interval_s": 10.0,
+    "no_display": true
+  },
+  "started_wall_utc": "2026-11-03T17:00:00.000000+00:00",
+  "time_bases": {
+    "host_*": "time.monotonic() seconds in this process",
+    "source_time_s": "media-relative seconds (replay); null for webcam"
+  },
+  "times": {
+    "host_run_start_s": 999.0,
+    "host_tick_origin_s": 1000.0,
+    "host_run_end_s": 1060.5,
+    "observed_duration_s": 60.5
+  },
+  "run_end_reason": "eof",
+  "exit_code": 0,
+  "error_detail": null,
+  "files": {
+    "request": "requests.jsonl",
+    "schedule": "drops.jsonl",
+    "power": "power.csv"
+  },
+  "source": {
+    "info": {
+      "source_kind": "replay",
+      "source_id": "data/local/pilot-desk-01.mp4",
+      "backend": "FFMPEG",
+      "time_method": "media_pos_msec",
+      "cfr_assumed": false,
+      "reported_fps": 30.0,
+      "reported_frame_count": 1800,
+      "observed_width": 1280,
+      "observed_height": 720,
+      "frames_delivered": 1799,
+      "drop_counts": {
+        "replay_late": 1
+      }
+    },
+    "end": {
+      "reason": "eof",
+      "detail": "",
+      "complete": true
+    }
+  },
+  "vlm": {
+    "config": {
+      "base_url": "http://127.0.0.1:8080",
+      "model": "smolvlm2-500m-q8",
+      "max_output_tokens": 64,
+      "read_timeout_s": 4.0
+    },
+    "max_tokens": 64,
+    "server_properties": {
+      "build_info": "b0-synthetic",
+      "model_alias": "smolvlm2-500m-q8",
+      "total_slots": 1
+    }
+  },
+  "telemetry": {
+    "enabled": true,
+    "sysfs_interval_s": 1.0,
+    "battery_interval_s": 10.0,
+    "battery_source": "Windows.Devices.Power.BatteryReport"
+  },
+  "counts": {
+    "requests": 22,
+    "status:ok": 21,
+    "status:timeout": 1,
+    "tick_skipped_busy": 7,
+    "replay_late": 1,
+    "tick_skipped_server_unknown": 1,
+    "frames_delivered": 1799,
+    "power_samples": 16
+  },
+  "display": {
+    "enabled": false,
+    "error": null
+  },
+  "threads_not_joined": [],
+  "platform": {
+    "system": "Linux",
+    "release": "5.15.167.4-microsoft-standard-WSL2",
+    "machine": "x86_64",
+    "python": "3.10.12"
+  }
+}

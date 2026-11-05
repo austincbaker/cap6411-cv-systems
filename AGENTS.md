@@ -32,19 +32,22 @@
   laptop.
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
-  Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`, `app/`,
-  `configs/`, `scripts/`, `tests/` and `docs/`. Setuptools discovers packages
-  under `src/`; imports are `vlm`, `energy` and `capture`, not `src.vlm` etc.
+  Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`,
+  `src/contracts/`, `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
+  Setuptools discovers packages under `src/`; imports are `vlm`, `energy`,
+  `capture` and `contracts`, not `src.vlm` etc.
   `app/` is not a package under `src/`; run it from the repository root.
-  `src/gates/`, `src/evaluation/`, `experiments/`, `tests/fixtures/` and `data/`
-  remain proposed until their items are implemented.
-- **Key contracts:** `docs/data-contracts.md` (planned in item `2d`) is the
-  authoritative file contract: versioned JSONL prediction and request logs, CSV
-  annotations and power samples, and a JSON run manifest. Evaluation tools
-  consume these files, not application internals. Keep source-frame time,
-  response-available time and the shared monotonic timeline distinct. Current
-  component records are provisional and documented in `README.md` and
-  `docs/methodology.md`; they do not replace item `2d`'s schema handoff.
+  `tests/fixtures/contracts/` holds the item 2d contract fixtures.
+  `src/gates/`, `src/evaluation/`, `experiments/` and `data/` remain proposed
+  until their items are implemented.
+- **Key contracts:** `docs/data-contracts.md` (item `2d`, version `1-draft`
+  until James and Shawn sign off) is the authoritative file contract:
+  versioned JSONL request, skip and prediction logs, CSV annotations and power
+  samples, a JSON run manifest and a JSON metrics report. `src/contracts/`
+  validates them; evaluation tools import it and consume these files, not
+  application internals. Keep source-frame time, response-available time and
+  the shared monotonic timeline distinct. Change the document, the validator
+  and the fixtures together.
 - **External code:** `.cache/llama.cpp/` is a gitignored upstream llama.cpp
   checkout. Do not edit it, and its own `AGENTS.md` does not apply to this
   project.
@@ -65,7 +68,8 @@ rather than duplicating it once those steps exist.
   `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
   qualified Windows battery source and WSL sysfs scale limitation. The fixed-interval
   application is `uv run python -m app.main` (item `1d`); see the README's
-  "Capture and baseline" section.
+  "Capture and baseline" section. Check run files against the item `2d`
+  contract with `uv run contracts-check RUN_DIR`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
   artifact locations are documented in the README. Python package installation

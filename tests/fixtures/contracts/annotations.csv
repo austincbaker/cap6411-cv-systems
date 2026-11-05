@@ -1,0 +1,5 @@
+schema_version,video_id,event_id,label,onset_s,end_s,group_id,split,annotator,notes
+1-draft,pilot-desk-01,E1,person_enters,10.0,12.0,desk-session-01,dev,synthetic,
+1-draft,pilot-desk-01,E2,object_placed,25.0,,desk-session-01,dev,synthetic,instantaneous event
+1-draft,pilot-desk-01,E3,person_leaves,50.0,51.0,desk-session-01,dev,synthetic,
+1-draft,pilot-desk-02,E4,person_enters,10.0,11.0,desk-session-02,dev,synthetic,other video; never matched against pilot-desk-01

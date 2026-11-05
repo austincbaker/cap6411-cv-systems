@@ -5,7 +5,7 @@
 **GitHub blocked by:** [1b (#2)](https://github.com/austincbaker/cap6411-cv-systems/issues/2), [1d (#4)](https://github.com/austincbaker/cap6411-cv-systems/issues/4), [1e (#5)](https://github.com/austincbaker/cap6411-cv-systems/issues/5), [1f (#6)](https://github.com/austincbaker/cap6411-cv-systems/issues/6), [2c (#9)](https://github.com/austincbaker/cap6411-cv-systems/issues/9)
 
 **Phase**: 2 — Deliver a gated application and evaluation contracts
-**Status**: ⬜ Not started
+**Status**: 🟡 In progress (draft `1-draft` awaiting James/Shawn review)
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D02, D06, D07, D08; R01, R10
 **Depends on**: [1b](../phase-1-live-inference-and-measurement/1b-power-telemetry.md), [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md), [1f](../phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md), [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md)
 **Blocks**: [2e](../phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md), [3d](../phase-3-budget-control-and-evaluation-tools/3d-event-matching.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md), [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md)
