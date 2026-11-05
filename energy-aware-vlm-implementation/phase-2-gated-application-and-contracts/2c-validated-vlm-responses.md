@@ -12,7 +12,7 @@
 
 ## Scope
 
-Owner: Austin. Constrain prompts and validate model responses against the selected event/observation vocabulary. Record request status, time and available token statistics without confusing model text with confirmed temporal events.
+Owners: Austin and James. Constrain prompts and validate model responses against the selected event/observation vocabulary. Record request status, time and available token statistics without confusing model text with confirmed temporal events.
 
 ## Tasks
 

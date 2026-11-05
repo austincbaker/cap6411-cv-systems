@@ -107,7 +107,9 @@ rather than duplicating it once those steps exist.
   `src/capture/`, `src/gates/`), James owns data and event scoring (`data/`,
   `src/evaluation/`, `experiments/score_events.py`), and Shawn owns methods,
   benchmarks and analysis (`docs/methodology.md`, `experiments/run_benchmarks.py`,
-  `experiments/analyze_results.py`). Coordinate edits to shared documents.
+  `experiments/analyze_results.py`). Items `2c` (prompts/responses) and `2d` (evaluation
+  contracts/fixtures) are jointly owned by Austin and James. Coordinate edits to shared
+  documents.
 
 ## Data and measurement integrity
 

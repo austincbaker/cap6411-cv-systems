@@ -12,7 +12,7 @@
 
 ## Scope
 
-Owners: Austin (lead drafter) and Alejandro; James and Shawn review the consumer interfaces. Freeze versioned file contracts and small synthetic examples by the end of Week 2. This is the handoff that lets evaluation software be developed independently of the running VLM. Rev. 6 adds the application run interface, a metrics/error-report schema and fixture, a shared contract validator, the `2b` event-derivation rules in the prediction contract, and AC/battery state in the run manifest.
+Owners: Austin and James; Alejandro reviews the application interface and Shawn reviews the measurement/analysis interface. Freeze versioned file contracts and small synthetic examples by the end of Week 2. This is the handoff that lets evaluation software be developed independently of the running VLM. Rev. 6 adds the application run interface, a metrics/error-report schema and fixture, a shared contract validator, the `2b` event-derivation rules in the prediction contract, and AC/battery state in the run manifest.
 
 ## Tasks
 

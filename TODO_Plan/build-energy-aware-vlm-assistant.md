@@ -214,8 +214,8 @@ Required command-line behavior includes useful errors for malformed input, separ
 - **Dependencies / entry criteria:** Phase 1 inference and telemetry work; pilot recordings and event definitions exist.
 - [ ] **Alejandro:** Add downsampled/regional change scores, persistent references, hysteresis, cooldowns, refreshes and simple relevance rules in `src/gates/change.py` and `src/gates/scheduler.py`.
 - [ ] **Alejandro:** Handle a busy VLM with latest-frame replacement and update `app/state.py` to suppress repeated notifications.
-- [ ] **Austin:** Add prompt/response validation in `src/vlm/prompts.py` and baseline timing/token observations to request logs.
-- [ ] **Austin and Alejandro:** Freeze first-version field names, time bases and units in `docs/data-contracts.md`; provide example annotations, predictions, power samples and manifests in `tests/fixtures/`.
+- [ ] **Austin and James:** Add prompt/response validation in `src/vlm/prompts.py` and baseline timing/token observations to request logs.
+- [ ] **Austin and James:** Freeze first-version field names, time bases and units in `docs/data-contracts.md`; provide example annotations, predictions, power samples and manifests in `tests/fixtures/`.
 - [ ] **James:** Finish the selected capture set, label observable event intervals, define grouped splits and manually score a small reference example.
 - [ ] **Shawn:** Finalize repeat counts, randomized trial order, warm-up, missing-data rules and baseline configuration templates in `configs/` and `docs/methodology.md`.
 - **Acceptance criteria:** A mixed-activity replay logs both skipped and admitted frames; all required example files validate and have known expected metrics.
@@ -264,8 +264,8 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 | [1f](../energy-aware-vlm-implementation/phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md) | 1 | Shawn | Measurement protocol and research review | None; independent discovery/build item | P1 | [#6](https://github.com/austincbaker/cap6411-cv-systems/issues/6) |
 | [2a](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md) | 2 | Alejandro | Change gate and relevance rules | `1c`, `1d`, `1e` | P1 | [#7](https://github.com/austincbaker/cap6411-cv-systems/issues/7) |
 | [2b](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md) | 2 | Alejandro | Latest-frame scheduling and scene state | `1d`, `2a`, `2c` | P1 | [#8](https://github.com/austincbaker/cap6411-cv-systems/issues/8) |
-| [2c](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | 2 | Austin | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) |
-| [2d](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin (lead) and Alejandro | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
+| [2c](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | 2 | Austin and James | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) |
+| [2d](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin and James | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
 | [2e](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md) | 2 | James | Annotated dataset, grouped splits and scoring examples | `1e`, `2d` | P1 | [#11](https://github.com/austincbaker/cap6411-cv-systems/issues/11) |
 | [2f](../energy-aware-vlm-implementation/phase-2-gated-application-and-contracts/2f-benchmark-configurations.md) | 2 | Shawn | Benchmark protocol and configuration templates | `1f`, `2d` | P1 | [#12](https://github.com/austincbaker/cap6411-cv-systems/issues/12) |
 | [3a](../energy-aware-vlm-implementation/phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md) | 3 | Austin | Calibrated energy-budget admission | `1b`, `2d`, `2f` | P1 | [#13](https://github.com/austincbaker/cap6411-cv-systems/issues/13) |
@@ -294,8 +294,8 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 - [ ] `tests/test_energy_analysis.py` — Shawn checks known constant-power traces, irregular sample intervals, supported rollover, gaps, unit conversions and idle subtraction.
 - [ ] `tests/test_benchmark_runner.py` — Shawn verifies unique run outputs, repeat counts and failed-trial recording with a lightweight fake application.
 - [ ] `tests/test_scheduler.py` — Alejandro verifies cooldown/refresh behavior, latest-frame replacement, no accumulated stale queue, and deterministic change-score cases: identical frames, global versus regional changes, threshold boundaries, reference updates, gradual change and lighting-only variation.
-- [ ] `tests/test_prompts.py` — Austin verifies prompt construction, valid parsing, malformed or partial responses and out-of-vocabulary labels (rev. 6).
-- [ ] `tests/test_contracts.py` — Austin and Alejandro verify that every fixture validates and malformed records fail through the shared validator used by the scorer and analyzer (rev. 6).
+- [ ] `tests/test_prompts.py` — Austin and James verify prompt construction, valid parsing, malformed or partial responses and out-of-vocabulary labels (rev. 6).
+- [ ] `tests/test_contracts.py` — Austin and James verify that every fixture validates and malformed records fail through the shared validator used by the scorer and analyzer (rev. 6).
 - [ ] `tests/test_budget.py` — Austin verifies admission under known costs, allowance refill, infeasible budgets and explicit overspend accounting.
 - [ ] Establish the test setup during implementation and run `python -m pytest tests/` once these proposed files exist; document any repository-wide checks actually adopted.
 - [ ] Manually verify changed-image processing with cache enabled, camera/model failures and long-run application stability.
@@ -531,3 +531,13 @@ The original summary's development-only acceptance flags are historical and supe
 by D11 and this owner acceptance; raw samples and measured values are unchanged.
 No live tests are repeated. No dependency, priority, owner or milestone changes;
 the 61 prerequisite edges remain.
+
+### Revision 9 — 2026-11-05 — joint ownership of 2c and 2d
+
+**Trigger:** Austin requested that he and James both work issues 2c (#9) and 2d (#10).
+
+**Ownership:** Both items are jointly owned by Austin and James. Update their GitHub
+assignees, scope statements, task/test ownership and planning indexes accordingly.
+Alejandro remains the application-interface reviewer for 2d and Shawn reviews its
+measurement/analysis interface. Existing task scope, acceptance criteria, progress,
+priorities, dependencies and milestone dates remain; all 61 edges are preserved.
