@@ -1,0 +1,2 @@
+schema_version,run_id,source,sensor_id,domain,quantity,host_read_start_s,host_time_s,raw_value,raw_unit,value,unit,valid,error,ac_online,battery_status,quality_flags
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1029.6,1030.2,,mWh,0.0,J,false,TimeoutExpired,,,not_verified_discharging
