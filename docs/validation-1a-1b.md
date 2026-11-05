@@ -1,12 +1,12 @@
 # Implementation validation: items 1a and 1b
 
 These are smoke checks on the WSL2 experiment platform (D11), not the final
-task-quality/energy benchmark. `1a` closes on owner review; `1b` passed the
-owner-authorized unplugged source check described below.
+task-quality/energy benchmark. Austin accepted both items on 2026-11-05 after
+review of the existing evidence and explicitly instructed closing issues #1 and #2.
 Raw image files and model weights remain local; small output/telemetry examples are
 included here so Alejandro, James and Shawn can inspect the interfaces.
 
-## Item 1a: development inference verified; laptop acceptance pending
+## Item 1a: inference and owner acceptance verified
 
 The CPU-only build used llama.cpp commit
 `620d2225cc436ab0b001e3200e590e3b286ef9ab`, SmolVLM2-500M-Video-Instruct Q8_0 and the
@@ -70,6 +70,34 @@ its full-capacity scale disagreed with Windows. Native updates were coarse (30â€
 so later comparisons require long controlled runs. See the
 [qualification report](1b-battery-qualification.md) for preserved evidence and limitations,
 and [methodology.md](methodology.md) for Shawn's handoff.
+
+## Owner closeout â€” 2026-11-05
+
+Austin explicitly authorized updating and closing both issues after the evidence audit.
+The implementation was merged in [PR #31](https://github.com/austincbaker/cap6411-cv-systems/pull/31).
+This is acceptance of the existing runs, with no new live measurement.
+
+For `1a`, the audit checked four successful bounded image requests, two distinct image
+hashes, the persistent-server record, CPU provenance and the stopped-service failure.
+The pinned setup and run instructions are documented in the README. D11/Revision 6
+accepts the tested WSL2 laptop as the experiment platform. The original
+`validation-summary.json` retains its capture-time `development-smoke-only` label and
+`designated_laptop_validation=false`; these historical acceptance flags are superseded
+by the [dated owner-acceptance record](examples/acceptance-1a-1b.json). Raw measurements
+and the original summary are unchanged. A second-member setup run is not claimed.
+
+For `1b`, the audit checked all 28 samples for validity, discharging state, AC off,
+monotonic query times, mWh-to-joule conversion and nonincreasing remaining capacity.
+The first/last capacity difference is 3.089 Wh (11,120.4 J), and the preserved executed
+script matches the manifest SHA-256. The original GO decision and all three phases
+are present. The source is suitable for longer-window whole-laptop battery comparisons,
+subject to its documented coarse updates and background activity. CPU/package and
+individual-inference energy remain unavailable; workload effects and savings are unproven.
+
+Austin authorized closure using this evidence review instead of waiting for a separate
+Shawn sign-off. No approval or review is attributed to Shawn. His later experimental
+protocol and analysis work remain separate. Each laptop still requires its own source
+qualification. The machine-readable acceptance record includes evidence-file hashes.
 
 ## Automated verification
 

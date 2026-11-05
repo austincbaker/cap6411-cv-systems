@@ -5,7 +5,7 @@
 **GitHub blocked by:** None
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: 🟡 In progress (source qualified; awaiting Shawn's measurement review)
+**Status**: 🟢 Complete — owner accepted 2026-11-05
 **Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D08, D11, D12; R03, R08
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md)
@@ -52,7 +52,7 @@ The stub is considered complete when every row below shows 🟢.
 |---|---|---|---|---|---|
 | 1 | Select and verify the primary hardware/sensor path and record units, energy domains and available battery measurements. | [Tasks](#tasks) | The chosen sensor returns interpretable samples, or an unavailable sensor is explicitly reported. | src/energy/windows.py:56, docs/1b-battery-qualification.md:3 | 🟢 |
 | 2 | Implement sample collection with timestamps, validity and lifecycle cleanup. | [Tasks](#tasks) | A finite run produces a trace aligned with its measured start/end interval. | src/energy/monitor.py:188, src/energy/monitor.py:314, tests/test_energy_monitor.py:147 | 🟢 |
-| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | Shawn can explain the energy domain and calculate a check value from the trace. | docs/examples/1b-battery-qualification/samples.jsonl:1, docs/1b-battery-qualification.md:17 | 🟡 |
+| 3 | Provide a short trace and document missing samples and counter behavior for Shawn. | [Tasks](#tasks) | The energy domain and trace calculation are documented and accepted by the owner after evidence review. | docs/examples/1b-battery-qualification/samples.jsonl:1, docs/examples/acceptance-1a-1b.json:1 | 🟢 |
 | 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/1b-battery-qualification.md:3, tests/test_windows_battery.py:102 | 🟢 |
 
 ## Implementation notes
@@ -119,3 +119,16 @@ per-call energy and load effects are not established. The source check closes th
 76 fake-based tests and Ruff checks passed. Shared run schemas and long-run protocols
 remain items 2d and 2f; Shawn's review is the consumer handoff, not claimed completed here.
 Issue #2 stays open for code review and merge; source qualification is complete.
+
+## Owner closeout — 2026-11-05
+
+Austin accepted the source qualification and explicitly authorized closure of issue #2
+after the evidence review in `docs/validation-1a-1b.md`. It rechecked the 28 valid
+unplugged readings, monotonic query times, mWh/J units, 3.089 Wh capacity difference
+and executed-script hash. The original GO decision and limitations remain intact.
+
+The pending reviewer handoff is resolved by Austin's explicit closure instruction
+on this evidence review; a separate Shawn sign-off is not claimed. Row 3 now records
+that owner acceptance. Shawn retains ownership of the later protocol and analysis.
+PR #31 is merged; all acceptance and Definition-of-Done rows are complete. Evidence:
+`docs/examples/acceptance-1a-1b.json`.
