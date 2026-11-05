@@ -347,6 +347,10 @@ def _prediction_rules(r: dict) -> list[str]:
         out.append("source_time_s and available_source_time_s are both set or both missing")
     elif src is not None and avail < src:
         out.append("available_source_time_s is before source_time_s")
+    if src is not None and avail is not None:
+        expected = src + (r["response_available_s"] - r["host_capture_s"])
+        if not math.isclose(avail, expected, rel_tol=0.0, abs_tol=1e-6):
+            out.append("available_source_time_s does not match host response delay")
     return out
 
 
@@ -380,6 +384,14 @@ def _manifest_rules(r: dict) -> list[str]:
     for key in ("host_run_start_s", "host_tick_origin_s", "host_run_end_s"):
         if key not in r["times"]:
             out.append(f"times.{key} is missing (use null when unknown)")
+        elif r["times"][key] is not None and not _is_kind(r["times"][key], "float"):
+            out.append(f"times.{key} must be a finite number or null")
+    times = [
+        r["times"].get(key) for key in ("host_run_start_s", "host_tick_origin_s", "host_run_end_s")
+    ]
+    known = [value for value in times if value is not None and _is_kind(value, "float")]
+    if known != sorted(known):
+        out.append("manifest host times are out of order")
     if "enabled" not in r["telemetry"]:
         out.append("telemetry.enabled is missing")
     for key in ("at_start", "at_end"):

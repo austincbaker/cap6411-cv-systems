@@ -285,6 +285,10 @@ def test_duration_limit_stops_a_run_and_exits_zero(tmp_path):
     assert result.exit_code == 0
     assert result.manifest["run_end_reason"] == "duration_limit"
     assert 0.6 <= result.manifest["times"]["observed_duration_s"] < 1.0
+    requests = read_jsonl(result.run_dir / "requests.jsonl")
+    assert all(
+        r["host_tick_s"] < result.manifest["times"]["host_tick_origin_s"] + 0.6 for r in requests
+    )
     assert baseline_threads_alive() == []
 
 

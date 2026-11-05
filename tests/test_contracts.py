@@ -213,3 +213,17 @@ def test_expected_quality_counts_are_consistent():
     assert m["f1"] == pytest.approx(2 * p * r / (p + r), abs=1e-6)
     delays = [x["delay_s"] for x in m["matches"] if x["outcome"] == "true_positive"]
     assert m["delay_s"]["mean"] == pytest.approx(sum(delays) / len(delays))
+
+
+def test_prediction_rejects_incorrect_source_availability():
+    record = load("prediction", RUN / "predictions.jsonl")[0]
+    record["available_source_time_s"] = record["source_time_s"]
+    assert any("host response delay" in issue for issue in validate_record("prediction", record))
+
+
+def test_manifest_rejects_invalid_or_unordered_host_times():
+    record = load("manifest", RUN / "manifest.json")[0]
+    record["times"]["host_run_end_s"] = "broken"
+    assert any("finite number" in issue for issue in validate_record("manifest", record))
+    record["times"]["host_run_end_s"] = record["times"]["host_run_start_s"] - 1
+    assert any("out of order" in issue for issue in validate_record("manifest", record))

@@ -725,6 +725,9 @@ class BaselineRun:
             if end_at is not None and now >= end_at and self.run_end_reason is None:
                 self.run_end_reason = "duration_limit"
                 self.source.stop()
+            if self.run_end_reason == "duration_limit" and not self.slot.closed.is_set():
+                self.slot.closed.wait(0.05)
+                continue
             if self.slot.closed.is_set():
                 return  # no dispatch after the source ends; shutdown collects any in-flight request
 
