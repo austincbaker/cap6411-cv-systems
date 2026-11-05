@@ -32,11 +32,12 @@
   laptop.
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
-  Implemented components are `src/vlm/`, `src/energy/`, `configs/`, `scripts/`,
-  `tests/` and `docs/`. Setuptools discovers packages under `src/`; imports
-  are `vlm` and `energy`, not `src.vlm` and `src.energy`. `app/`,
-  `src/capture/`, `src/gates/`, `src/evaluation/`, `experiments/`,
-  `tests/fixtures/` and `data/` remain proposed until their items are implemented.
+  Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`, `app/`,
+  `configs/`, `scripts/`, `tests/` and `docs/`. Setuptools discovers packages
+  under `src/`; imports are `vlm`, `energy` and `capture`, not `src.vlm` etc.
+  `app/` is not a package under `src/`; run it from the repository root.
+  `src/gates/`, `src/evaluation/`, `experiments/`, `tests/fixtures/` and `data/`
+  remain proposed until their items are implemented.
 - **Key contracts:** `docs/data-contracts.md` (planned in item `2d`) is the
   authoritative file contract: versioned JSONL prediction and request logs, CSV
   annotations and power samples, and a JSON run manifest. Evaluation tools
@@ -62,8 +63,9 @@ rather than duplicating it once those steps exist.
   `uv run vlm-smoke ...` and diagnostic `uv run energy-monitor ...`. The README also
   documents `WindowsBatteryReader` and the owner-authorized unplugged
   `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
-  qualified Windows battery source and WSL sysfs scale limitation. No webcam application
-  entry point exists yet; item `1d` adds `app/main.py`.
+  qualified Windows battery source and WSL sysfs scale limitation. The fixed-interval
+  application is `uv run python -m app.main` (item `1d`); see the README's
+  "Capture and baseline" section.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
   artifact locations are documented in the README. Python package installation
@@ -75,7 +77,10 @@ rather than duplicating it once those steps exist.
 - **Lint, format, and type-check:** Run `uv run ruff check src scripts tests`,
   `uv run ruff format --check src scripts tests` and `git diff --check`.
   No static type checker is configured. Use `uv lock --check` after dependency changes.
-- **Required CI checks:** No CI configuration is present in this checkout.
+- **Required CI checks:** GitHub Actions workflow `.github/workflows/ci.yml` runs on pushes
+  and pull requests using Ubuntu 22.04 and Python 3.10. It synchronizes the locked development
+  environment, checks `uv.lock`, runs the test suite, Ruff lint/format checks and a repository
+  whitespace check. It intentionally excludes live model, camera and sensor checks.
 
 ## Planning documents
 

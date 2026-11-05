@@ -443,7 +443,7 @@ Small raw traces and the live smoke summary are linked in
 [validation-1a-1b.md](validation-1a-1b.md). Long-run trials and statistical comparisons remain
 the later evaluation tasks.
 
-## References 
+## References
 
 [1] A. Marafioti et al., "SmolVLM: Redefining Small and Efficient Multimodal Models," arXiv:2504.05299, 2025.
 

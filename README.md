@@ -151,3 +151,115 @@ sensor access is required. Live validation and its limitations are recorded in
 
 The [implementation index](energy-aware-vlm-implementation/README.md) links the team
 tasks and their GitHub issues. No webcam/event-detection implementation is included yet.
+
+## Capture and baseline
+
+Webcam / real-time replay sources (`src/capture/`, issue #3) and the
+fixed-interval baseline app (`app/`, issue #4).
+
+Setup and tests use the same `uv sync --extra dev` environment as the rest of
+the repository (OpenCV and NumPy are declared in `pyproject.toml`). The tests in
+`tests/test_capture_sources.py` and `tests/test_app_baseline.py` need no webcam,
+model or server.
+
+### Running the baseline
+
+Start the server first (see "Run local inference"), then:
+
+```bash
+# replay a recording in real time, one VLM request every 2 s, headless
+uv run python -m app.main --source replay --video clip.mp4 --interval-s 2 --no-display
+
+# webcam for 60 s with the overlay window (press q to stop)
+uv run python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
+```
+
+The app reads the server address, model alias, output bound and timeouts from
+`--profile` (default `configs/inference.json`) and exits with code 2 before
+creating a run directory if the server does not answer. Run
+`uv run python -m app.main -h` for the full flag list. The flags are a stable interface for the benchmark
+runner (#18); change them only with a note to its owner.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--source webcam\|replay` | required | input type |
+| `--video PATH` | | file for `replay` |
+| `--device ID` | `0` | camera index or device path for `webcam` |
+| `--width/--height/--camera-fps` | | requested camera settings (observed values are recorded) |
+| `--interval-s N` | `2.0` | seconds between VLM invocations |
+| `--duration-s N` | until EOF / q / Ctrl-C | stop after N seconds |
+| `--profile PATH` | `configs/inference.json` | inference profile: server address, model, bounds |
+| `--prompt`, `--max-tokens`, `--request-timeout-s` | profile values | request settings; `--max-tokens` cannot exceed the profile bound |
+| `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
+| `--server-idle-timeout-s` | `60` | after an uncertain timeout, end the run if the server stays busy this long |
+| `--telemetry on\|off` | `on` | sysfs and Windows battery telemetry |
+| `--telemetry-interval-s`, `--battery-interval-s` | `1`, `10` | sample intervals for sysfs and the Windows battery report |
+| `--run-dir PATH` | `runs/<UTC>_<source>/` | output directory (refuses to overwrite) |
+| `--no-display` | | headless run |
+| `--shutdown-timeout-s` | `5` | max wait for threads / in-flight request on Ctrl-C |
+
+Exit codes: `0` completed (EOF, duration, or q), `2` bad config, source failed
+to open, or source ended in error, `130` interrupted, `1` unexpected error.
+
+### Scheduling
+
+Ticks fire at `t0 + k * interval` on the monotonic clock. Each tick sends the
+newest frame. At most one request is in flight; a tick that fires while one is
+running is skipped and logged as `tick_skipped_busy`. Nothing is queued.
+Capture runs on its own thread, so slow inference never slows the source.
+
+A read timeout can leave the server still working (`server_state_unknown` in
+the request record). After one, the app sends nothing until llama-server's
+`/slots` reports no busy slot; those ticks are logged as
+`tick_skipped_server_unknown`. If the server stays busy longer than
+`--server-idle-timeout-s`, the run ends with `server_not_idle` (exit 2).
+
+### Run directory
+
+All field names are provisional until #10 (`schema_version: "0-provisional"`).
+
+- `requests.jsonl`: the client's `InferenceResult` record (`request_id`, `status`,
+  `text`, `request_started_s`, `response_available_s`, `elapsed_s`, token counts,
+  `finish_reason`, `error`, `server_state_unknown`, ...) plus the app's `run_id`,
+  `tick_index`, integer `frame_id`, `source_kind`, `source_time_s`,
+  `host_capture_s`, `host_tick_s`, `encode_s`, `image_bytes`. The app adds the
+  statuses `client_exception` and `abandoned_at_shutdown`.
+- `drops.jsonl`: `origin` (`app` or `source`), `reason`
+  (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
+  `empty_frame`, `read_failed`), `frame_id`, host times
+- `telemetry.jsonl`: one line per reading with `source` = `sysfs`
+  (`energy.monitor.Reading` fields) or `windows_battery`
+  (`energy.windows.WindowsBatteryReading` fields). Only `windows_battery` is
+  the qualified energy source; unavailable readings are `valid: false`, never `0`
+- `manifest.json`: config, source metadata (backend, requested vs observed
+  size/fps, time method), source end reason, run end reason, counts, platform
+
+### Time bases
+
+- `host_*`: `time.monotonic()` seconds in the app process. Used to align frames,
+  requests and power samples.
+- `source_time_s`: media-relative seconds from the video's timestamps
+  (`CAP_PROP_POS_MSEC`). If those are unusable, it is `frame_index / fps`; this
+  needs a valid fps and is recorded as `time_method: frame_index_over_fps`,
+  `cfr_assumed: true`. Webcam frames have `source_time_s = null`; use `host_capture_s`.
+
+Replay frame *i* is due at `start + (t_i - t_0)`. Frames already later than one
+frame period are skipped without decoding and logged as `replay_late`, so a
+60 s clip takes about 60 s whether decoding or the consumer is fast or slow.
+Frame IDs are the decode index, so they are the same on every replay.
+
+### Using a source directly
+
+```python
+from capture import ReplaySource, WebcamSource
+
+with ReplaySource("clip.mp4") as source:          # or WebcamSource(0)
+    for frame in source:                          # frame.image is HxWx3 uint8 BGR
+        print(frame.frame_id, frame.source_time_s, frame.host_capture_s)
+print(source.end.reason)       # eof | incomplete_source | decode_failures | disconnected | stopped | ...
+print(source.info.as_dict())   # backend, requested vs observed settings, drop counts
+```
+
+Opening fails with `SourceOpenError` (missing file, undecodable video, no
+camera / permission). The capture is released on every exit path, including
+Ctrl-C, and can be reopened.
