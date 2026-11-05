@@ -12,7 +12,7 @@ Time bases (kept separate, never substituted for one another):
 Image convention: ``image`` is an HxWx3 uint8 numpy array in OpenCV's BGR
 channel order, exactly as ``cv2.VideoCapture.read`` returns it.
 
-Field names are provisional; item 2d (#10) freezes them.
+Run-file field names follow docs/data-contracts.md (item 2d).
 """
 
 from __future__ import annotations

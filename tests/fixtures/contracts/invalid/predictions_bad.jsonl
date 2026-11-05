@@ -1,0 +1,2 @@
+{"schema_version": "1-draft", "run_id": "0000000000000000000000000000002d", "prediction_id": "P1", "label": "person_enters", "request_id": "req-0005", "frame_id": 300, "source_time_s": 10.0, "host_capture_s": 1009.98, "response_available_s": 1011.78, "available_source_time_s": 9.0}
+{"schema_version": "1-draft", "run_id": "0000000000000000000000000000002d", "prediction_id": "P2", "label": "person_enters", "request_id": "req-0006", "frame_id": 360, "source_time_s": 12.0, "host_capture_s": 1011.98, "response_available_s": 1013.68, "available_source_time_s": null}

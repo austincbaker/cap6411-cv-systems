@@ -1,0 +1,17 @@
+schema_version,run_id,source,sensor_id,domain,quantity,host_read_start_s,host_time_s,raw_value,raw_unit,value,unit,valid,error,ac_online,battery_status,quality_flags
+1-draft,0000000000000000000000000000002d,sysfs,battery:BAT1:energy_now,battery_stored_energy,stored_energy,,1000.1,4700000,uWh,16920.0,J,true,,true,Not charging,wsl_host_validation_required;not_verified_discharging
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,999.6,1000.2,50000,mWh,180000.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,999.6,1000.2,-15600,mW,15.6,W,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,sysfs,battery:BAT1:energy_now,battery_stored_energy,stored_energy,,1001.1,4700000,uWh,16920.0,J,true,,true,Not charging,wsl_host_validation_required;not_verified_discharging
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1009.6,1010.2,50000,mWh,180000.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1009.6,1010.2,-15600,mW,15.6,W,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1019.6,1020.2,50000,mWh,180000.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1019.6,1020.2,-15600,mW,15.6,W,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1029.6,1030.2,,mWh,,J,false,TimeoutExpired,,,not_verified_discharging
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1029.6,1030.2,,mW,,W,false,TimeoutExpired,,,not_verified_discharging
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1039.6,1040.2,49840,mWh,179424.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1039.6,1040.2,-15600,mW,15.6,W,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1049.6,1050.2,49840,mWh,179424.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1049.6,1050.2,-15600,mW,15.6,W,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:remaining_capacity,whole_laptop_battery,stored_energy,1059.6,1060.2,49740,mWh,179064.0,J,true,,false,Discharging,
+1-draft,0000000000000000000000000000002d,windows_battery,windows:aggregate:charge_rate,whole_laptop_battery,discharge_power,1059.6,1060.2,-15600,mW,15.6,W,true,,false,Discharging,
