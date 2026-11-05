@@ -5,7 +5,7 @@
 **GitHub blocked by:** None
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: 🟡 In progress
+**Status**: 🟢 Complete — owner accepted 2026-11-05
 **Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D03, D09, D11; R05, R09
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md)
@@ -28,15 +28,15 @@ Owner: Austin. Establish persistent local multimodal inference using a supported
 
 ## Source references (if porting)
 
-Not a port. The existing repository contains a placeholder `README.md` and a Python-oriented `.gitignore`; all implementation paths above are proposed. Use the master plan's supplied research references where relevant and verify technical claims during implementation.
+Not a port. The implementation and pinned setup are merged in PR #31; the paths below were proposed during the original planning baseline. Use the master plan's supplied research references where relevant and verify technical claims during implementation.
 
 ## Open questions
 
-- [ ] Which model/build/quantization combination passes the WSL2 platform compatibility and latency check? **Result:** The pinned SmolVLM2-500M Q8_0 model/projector passes on the WSL2 experiment platform (D11); the owner confirms and closes this question. See `docs/validation-1a-1b.md`.
+- [x] Which model/build/quantization combination passes the WSL2 platform compatibility and latency check? **Result:** The pinned SmolVLM2-500M Q8_0 model/projector passes on the WSL2 experiment platform (D11); Austin accepted this result on 2026-11-05; see `docs/examples/acceptance-1a-1b.json`. See `docs/validation-1a-1b.md`.
 
 ## Acceptance criteria
 
-- [ ] A supported local model answers repeated image requests with a configured generation bound on the WSL2 experiment platform (owner-performed or owner-approved).
+- [x] A supported local model answers repeated image requests with a configured generation bound on the WSL2 experiment platform (owner-performed or owner-approved).
 - [x] Timeouts or unavailable service errors are distinguishable from valid descriptions.
 
 ## Definition of Done
@@ -45,10 +45,10 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Configure a repeatable local development and llama.cpp setup and record model/build/backend provenance. | [Tasks](#tasks) | A second member can follow the setup and identify the exact model and runtime used. | scripts/llama_runtime.py:46, configs/inference.json:1, README.md:7 | 🟡 |
+| 1 | Configure a repeatable local development and llama.cpp setup and record model/build/backend provenance. | [Tasks](#tasks) | A second member can follow the setup and identify the exact model and runtime used. | scripts/llama_runtime.py:46, configs/inference.json:1, README.md:7, docs/examples/acceptance-1a-1b.json:1 | 🟢 |
 | 2 | Implement the persistent inference interface and record latency, output bounds and request failures. | [Tasks](#tasks) | Repeated image requests use one loaded service and return successful responses or explicit failure records. | src/vlm/client.py:86, tests/test_inference_client.py:14 | 🟢 |
-| 3 | Document a small live smoke check and the supported fallback model if the initial candidate is impractical. | [Tasks](#tasks) | The chosen candidate passes the smoke check without dedicated-GPU use. | src/vlm/smoke.py:18, docs/validation-1a-1b.md:9 | 🟡 |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | tests/test_inference_client.py:64, docs/validation-1a-1b.md:9 | 🟡 |
+| 3 | Document a small live smoke check and the supported fallback model if the initial candidate is impractical. | [Tasks](#tasks) | The chosen candidate passes the smoke check without dedicated-GPU use. | src/vlm/smoke.py:18, docs/examples/inference-smoke.jsonl:1, docs/examples/acceptance-1a-1b.json:1 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | tests/test_inference_client.py:64, docs/examples/acceptance-1a-1b.json:1 | 🟢 |
 
 ## Implementation notes
 
@@ -98,6 +98,19 @@ The live smoke check establishes model compatibility that a fake transport canno
 Close the original matrix only when setup is reproducible, the selected model really runs, and request outcomes are reviewable. Model/build/quantization selection remains the original implementation-time verification item; no additional user decision is needed to begin.
 
 
-## Execution record — 2026-10-27
+## Initial execution record — 2026-10-27
 
 Software implemented locally with a pinned CPU runtime, persistent HTTP client, smoke CLI and focused tests. Under D11 the WSL2 smoke check is platform evidence; owner review closes the item. Four alternating images passed on one server process; all output lengths were below the 32-token bound. A stopped-service check recorded one connection failure without retrying. The test service was stopped after verification. Evidence is in `docs/validation-1a-1b.md` and `docs/examples/`. GitHub issue #1 remains open for review; source changes are on branch `feat/1a-1b-inference-telemetry`.
+
+## Owner closeout — 2026-11-05
+
+Austin accepted the pinned CPU-only SmolVLM2-500M Q8_0/model-projector setup and
+existing WSL2 smoke evidence, and explicitly instructed closure of issue #1. Four
+image requests succeeded within the 32-token bound through one server process; the
+stopped-service record distinguishes failure from a valid description. Setup is
+reproducibly documented; no second-member setup execution is asserted. PR #31 is merged.
+
+See `docs/validation-1a-1b.md` and `docs/examples/acceptance-1a-1b.json`. The latter
+supersedes the historical summary's development-only acceptance flags under D11,
+while preserving the original summary and all measured values. All acceptance and
+Definition-of-Done rows are complete.

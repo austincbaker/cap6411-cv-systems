@@ -6,6 +6,14 @@ Austin authorized the unplugged check. This meets D12's 2026-11-01 source-select
 deadline. The source is a battery-controller estimate, without external-meter validation;
 package energy and individual-inference energy remain unavailable.
 
+## Closeout — 2026-11-05
+
+Austin accepted the existing qualification evidence and explicitly authorized closing
+issue #2 after the source-state, unit, timestamp, energy-delta and script-hash checks.
+See the [owner closeout](validation-1a-1b.md#owner-closeout--2026-11-05) and
+[acceptance record](examples/acceptance-1a-1b.json). No new battery test or separate
+Shawn sign-off is claimed. The source limitations below remain applicable.
+
 ## Run and preserved evidence
 
 The team laptop ran Ubuntu 22.04.5 under WSL2. The check ran from

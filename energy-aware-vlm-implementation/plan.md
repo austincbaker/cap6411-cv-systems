@@ -18,7 +18,7 @@ Austin and Alejandro own the core runtime. James and Shawn own research and eval
 
 **Verified from the conversation:** The team has approximately one month. Austin and Alejandro have the most development availability. James and Shawn have less coding time but should each own a relevant software component used in the final results.
 
-**Repository baseline at planning time:** `README.md` contained only the project heading. **Implementation update (rev. 5):** Item `1a` now has a tested persistent client and a CPU smoke check on the WSL2 experiment platform (D11, rev. 6); owner review closes it. Item `1b` has completed the unplugged source check (rev. 7): native Windows battery reporting is qualified for longer-window whole-laptop measurements; WSL sysfs absolute values remain unqualified. See `docs/validation-1a-1b.md`. Other application components remain unimplemented.
+**Repository baseline at planning time:** `README.md` contained only the project heading. **Implementation update (rev. 8):** Austin accepted and authorized closure of items `1a` and `1b` on 2026-11-05. Item `1a` has a tested persistent client and CPU smoke evidence on the WSL2 experiment platform (D11). Item `1b` has completed the unplugged source check (rev. 7): native Windows battery reporting is qualified for longer-window whole-laptop measurements; WSL sysfs absolute values remain unqualified. See `docs/validation-1a-1b.md`. Other items retain their own acceptance criteria and status.
 
 The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [FastVLM](https://arxiv.org/abs/2412.13303), and [MobileVLM](https://arxiv.org/abs/2312.16886). These are supplied research references. This plan does not independently verify the performance claims or dataset details in earlier discussion.
 
@@ -92,7 +92,7 @@ The original Design choices remain settled. Stable identifiers below let item pl
 
 **Document authority:** `TODO_Plan/build-energy-aware-vlm-assistant.md` is the canonical master plan. `energy-aware-vlm-implementation/plan.md` is its synchronized reading copy, with local links adjusted for that directory. Future decisions must update the canonical plan and refresh the reading copy together; no separate decisions file is used.
 
-**Next deliverable (rev. 7):** Review and close `1a`, whose WSL2 smoke check counts under D11; review/merge the completed `1b` software and source qualification; and implement independent `1c`, `1e` and `1f`. Native Windows battery readings are available for integration, with coarse updates requiring long trials. Item `1d` still requires its capture and inference prerequisites. See the [implementation index](./README.md).
+**Next deliverable (rev. 8):** Continue the remaining application, contract and evaluation work using the accepted `1a`/`1b` components. Native Windows battery readings are qualified for longer controlled trials; shared schemas and final evaluation remain in their assigned items. See the [implementation index](./README.md).
 
 ### GitHub priorities and ownership (rev. 3)
 
@@ -199,7 +199,7 @@ Required command-line behavior includes useful errors for malformed input, separ
 
 - **Outcome:** A reproducible fixed-interval assistant runs on the selected machine and produces preliminary telemetry.
 - **Dependencies / entry criteria (rev. 1):** Ubuntu 22.04.5 LTS is selected. Independent model/sensor verification, input-source work, pilot-data work and protocol work may begin now; successful hardware/model checks are required before the integrated baseline is accepted.
-- [ ] **Austin:** Configure llama.cpp and implement persistent requests, bounded responses and errors in `src/vlm/client.py`; record build/model revisions. Software and the WSL2 platform smoke check are implemented; owner review closes the item.
+- [x] **Austin:** Configure llama.cpp and implement persistent requests, bounded responses and errors in `src/vlm/client.py`; record build/model revisions. Software and the WSL2 platform smoke check are implemented; Austin accepted the evidence on 2026-11-05 (rev. 8).
 - [x] **Austin:** Verify available Ubuntu 22.04.5 LTS energy/battery telemetry, implement the selected adapter in `src/energy/monitor.py`, and confirm its units, coverage and limitations. Source qualification passed on 2026-10-27; see `docs/1b-battery-qualification.md` (rev. 7).
 - [ ] **Alejandro:** Implement webcam and real-time recorded input in `src/capture/webcam.py` and `src/capture/replay.py`.
 - [ ] **Alejandro:** Connect fixed-interval inference and minimal scene display in `app/main.py` and `app/state.py`.
@@ -384,7 +384,7 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 ## High-Level Change Summary
 
 - **Target outcome:** A local webcam assistant detects meaningful changes under a configurable energy allowance, with measured quality and responsiveness.
-- **Current state (rev. 7):** Inference software and WSL2 smoke evidence are implemented; owner review remains for `1a`. Item `1b` source qualification passed with native Windows battery reporting and preserved raw evidence. Remaining application/evaluation work is pending.
+- **Current state (rev. 8):** Items `1a` and `1b` are accepted by Austin on 2026-11-05, with implementation merged in PR #31 and dated closeout evidence. Their closure does not complete the remaining application or evaluation items.
 - **Major changes:**
   - Week 1 establishes persistent inference, webcam/replay input, a fixed-interval baseline and usable telemetry.
   - Week 2 adds event gating, labeled data and stable contracts that enable independent evaluation development.
@@ -512,3 +512,22 @@ long-run experimental controls; 2d owns shared schemas. Source additions pass 76
 tests and Ruff. The measurement handoff notes that results can vary by laptop;
 record the machine/configuration, requalify additional laptops and keep comparisons
 on the same machine. No dependencies, owners or milestones changed; all 61 edges remain.
+
+### Revision 8 — 2026-11-05 — owner closeout of items 1a and 1b
+
+**Trigger:** After the evidence audit, Austin explicitly instructed updating and closing
+issues #1 and #2. PR #31 already merged the implementation.
+
+**Acceptance:** Mark both owned items, their acceptance checkboxes and all evidence
+rows complete. Austin accepts the existing CPU inference smoke check under D11 and
+the unplugged native Windows battery qualification under D12. The recorded closeout
+rechecks the source states, units, times, energy difference and executed-script hash.
+It resolves the pending measurement-review handoff through Austin's closure instruction;
+no separate Shawn sign-off is asserted, and his later protocol/analysis ownership remains.
+
+**Evidence integrity:** `docs/validation-1a-1b.md` and
+`docs/examples/acceptance-1a-1b.json` record dated acceptance and evidence hashes.
+The original summary's development-only acceptance flags are historical and superseded
+by D11 and this owner acceptance; raw samples and measured values are unchanged.
+No live tests are repeated. No dependency, priority, owner or milestone changes;
+the 61 prerequisite edges remain.

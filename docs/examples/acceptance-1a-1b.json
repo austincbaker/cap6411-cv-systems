@@ -1,0 +1,56 @@
+{
+  "record_type": "owner_acceptance_of_existing_evidence",
+  "accepted_on": "2026-11-05",
+  "owner": "Austin",
+  "authority": "Owner explicitly instructed updating and closing issues #1 and #2 after the evidence audit.",
+  "new_live_run": false,
+  "implementation_pr": "https://github.com/austincbaker/cap6411-cv-systems/pull/31",
+  "inference": {
+    "issue": 1,
+    "accepted": true,
+    "platform": "Team laptop, Ubuntu 22.04.5 LTS under WSL2 (D11)",
+    "requests": 4,
+    "generation_bound_tokens": 32,
+    "observed_output_tokens": [
+      24,
+      18,
+      24,
+      18
+    ],
+    "mean_latency_s": 2.4801471577520715,
+    "historical_summary": "docs/examples/validation-summary.json",
+    "superseded_metadata": {
+      "kind": "development-smoke-only-not-designated-laptop-acceptance",
+      "designated_laptop_validation": false
+    },
+    "current_interpretation": "D11/Revision 6 accepts this WSL2 run as platform evidence; Austin accepted it on 2026-11-05. The original summary and raw samples remain unchanged."
+  },
+  "telemetry": {
+    "issue": 2,
+    "accepted": true,
+    "source": "Windows.Devices.Power.BatteryReport",
+    "valid_unplugged_samples": 28,
+    "reported_energy_drop_wh": 3.089,
+    "recording_duration_s": 270.6195508259989,
+    "joules_per_mwh": 3.6,
+    "scope": "Whole-laptop reported battery energy for long controlled trials; no CPU/package or per-inference energy claim.",
+    "measurement_review": "Existing sample states, timestamps, capacity deltas, units and script hash independently checked during owner-authorized closeout.",
+    "signoff_basis": "Austin authorized closure on this evidence review; no separate Shawn sign-off is asserted.",
+    "limitations": [
+      "Native readings update coarsely (about 30\u201340 seconds).",
+      "WSL sysfs absolute battery scale remains unqualified.",
+      "Qualification is not a policy-savings or workload-effect experiment.",
+      "Requalify additional laptops and compare policies on the same machine."
+    ]
+  },
+  "evidence_sha256": {
+    "docs/examples/validation-summary.json": "dbcf505f46ad689432a776a42770055314d9d8d1c4ebe80e62e13a282aa32cc8",
+    "docs/examples/inference-smoke.jsonl": "29078bbf35846e25bdae7a06a4ec9cb4f93f50e0888af70f1cfaad86f53fc78f",
+    "docs/examples/inference-server-stopped.jsonl": "87d785fc7692a12c5e5a216281aaaa5b09259cc257d504567751c203c2d50f43",
+    "docs/examples/1b-battery-qualification/samples.jsonl": "0f04d6ebd9bca32cb9881fe5d8ac179bc20e97627a9cba0cd29dedd421e3b347",
+    "docs/examples/1b-battery-qualification/manifest.json": "2446f5562abf0a3aae2530762b97f318a3dab73ae55ca7694d8a36f34592007d",
+    "docs/examples/1b-battery-qualification/qualification.json": "34d06bb024d84d94508ab4f88639fa0e3e0544cbc7e48a13dd46e731de6af688",
+    "docs/examples/1b-battery-qualification/qualification-script-at-run.py.txt": "67dadf45e59d32f04362566527d3c2844b9f89233bf179d1a52430073547ff12",
+    "docs/examples/1b-battery-qualification/windows-reader-at-run.py.txt": "f4c933328e12c7f58a2c214a777876b865444582a7a4316c12f5ea59e3098f84"
+  }
+}
