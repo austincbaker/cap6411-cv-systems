@@ -29,10 +29,12 @@ def completion(text: str) -> dict:
 class FakeLlama:
     """Answers /props and /v1/chat/completions after ``latency_s``, cycling through ``outcomes``:
     ok, timeout (read timeout), connect_error, http_error, invalid, empty.
-    ``release`` cuts a pending wait short; ``max_active`` records concurrent completions."""
+    ``release`` cuts a pending wait short; ``max_active`` records concurrent completions.
+    ``texts``, when given, are the ok responses in order (the last one repeats)."""
 
-    def __init__(self, latency_s: float = 0.01, outcomes=("ok",)) -> None:
+    def __init__(self, latency_s: float = 0.01, outcomes=("ok",), texts=None) -> None:
         self.latency_s = latency_s
+        self._texts = list(texts) if texts else None
         self._outcomes = itertools.cycle(outcomes)
         self._lock = threading.Lock()
         self.release = threading.Event()
@@ -69,7 +71,11 @@ class FakeLlama:
                 return httpx.Response(200, content=b"not json")
             if outcome == "empty":
                 return httpx.Response(200, json=completion(""))
-            return httpx.Response(200, json=completion(f"fake description {len(self.completions)}"))
+            if self._texts:
+                text = self._texts.pop(0) if len(self._texts) > 1 else self._texts[0]
+            else:
+                text = f"fake description {len(self.completions)}"
+            return httpx.Response(200, json=completion(text))
         finally:
             with self._lock:
                 self.active -= 1

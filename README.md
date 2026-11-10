@@ -214,6 +214,126 @@ the request record). After one, the app sends nothing until llama-server's
 `tick_skipped_server_unknown`. If the server stays busy longer than
 `--server-idle-timeout-s`, the run ends with `server_not_idle` (exit 2).
 
+### Change gate (`--policy gated`, item 2a)
+
+`--policy gated` keeps the same tick grid but sends a tick's frame only when
+the change gate in `src/gates/change.py` triggers, so a gated run and a
+fixed-interval run over the same clip and `--interval-s` see the same
+candidate frames. With the gate, `--interval-s` is how often the gate looks
+(for example 0.5), not how often the VLM is called.
+
+```bash
+uv run python -m app.main --source replay --video clip.mp4 --policy gated \
+    --interval-s 0.5 --no-display
+```
+
+Each frame is compared with the last frame sent to the VLM (the acknowledged
+reference), so a slow change keeps growing until it triggers. Frames are
+shrunk to 160x120 gray, blurred and mean-subtracted (a uniform lighting shift
+is not change). A pixel counts as changed when it moved more than
+`--gate-pixel-delta` (default 25 of 255); the score is the changed fraction of
+the most-changed cell in a `--gate-grid` x `--gate-grid` grid (default 4;
+1 is a global score). A change starts when the score reaches `--gate-threshold`
+(default 0.3) and must last `--gate-persist-checks` checks in a row (default 3,
+so 1 s at 0.5 s checks) before it is sent, so a movement that comes and goes,
+like a head turn, is skipped and the frame sent shows the change once it has
+settled. `--gate-release-threshold` (off by default) adds hysteresis: a started
+change stays alive while the score is at least that value. Per tick, in order:
+
+| Reason | Logged in | When |
+|---|---|---|
+| `tick_skipped_busy`, `tick_skipped_server_unknown` | `drops.jsonl`, origin `app` | as in fixed-interval runs; checked first |
+| `gate_initial` | `requests.jsonl` | first frame, no reference yet |
+| `gate_refresh` | `requests.jsonl` | `--gate-refresh-s` passed since the last call (off by default) |
+| `gate_no_change` | `drops.jsonl`, origin `gate` | score below `--gate-threshold` (below `--gate-release-threshold` once a change has started) |
+| `gate_persisting` | `drops.jsonl`, origin `gate` | changed for fewer than `--gate-persist-checks` checks in a row |
+| `gate_cooldown` | `drops.jsonl`, origin `gate` | changed long enough, but within `--gate-min-interval-s` (default 2) of the last call |
+| `gate_change` | `requests.jsonl` | otherwise |
+
+Gate skips carry `gate_score`, `gate_global_score` and `gate_compute_s` (time
+spent scoring, for gate-overhead accounting); sent requests carry the same
+fields plus `gate_reason`. The manifest records `policy` and the `gate`
+settings, and `counts` has one entry per reason.
+
+#### Choosing the gate settings
+
+The defaults were chosen on development clips only: James's `real_thumbs_1`
+(9.7 min, two thumbs-ups) and his four short gesture clips plus a control.
+`real_thumbs_2` (8.8 min, one annotated thumbs-up) was held out and checked
+once with the chosen setting. On `real_thumbs_1`, ordinary movement scores
+0.02 (median) to 0.40 (99th percentile) and a thumbs-up peaks at 0.68 to
+0.75. The old default (threshold 0.05, no persistence) fired on head movement
+and made more calls than fixed 2 s sampling. Threshold 0.3 with 3 checks
+caught every gesture with 82% fewer calls than fixed sampling on
+`real_thumbs_1`; 0.4 cut calls further but leaves less margin under the
+gestures' scores. Hysteresis only added calls on these clips, so it is off.
+These clips have no object events: a small object such as a mug can cover
+less than a third of a grid cell and score below 0.3, so check clips with
+objects (or try `--gate-grid 8`) before relying on the defaults for
+`object_placed` and `object_removed`.
+
+| Clip (role) | Fixed 2 s calls | Gated calls | Gestures caught (fixed, gated) |
+|---|---|---|---|
+| `real_thumbs_1` (development) | 147 | 27 | 2/2, 2/2 |
+| `real_thumbs_2` (held out) | 133 | 28 | 1/1, 1/1 |
+| Jester thumbs-up replay, 60 s | 15 | 8 | 3/4, 4/4 |
+
+These come from `scripts/gate_sweep.py`, which decodes a clip once, samples the
+newest frame at every 0.5 s tick, runs the real gate for each setting and
+models inference as a fixed 2.5 s busy time (the Mac mini measured 2.5 to
+2.7 s per call):
+
+```bash
+uv run python scripts/gate_sweep.py clip.mov --windows clip.windows.csv \
+    --tolerance-s 0.5 --thresholds 0.1,0.2,0.3,0.4 --persist 1,2,3,4
+```
+
+Retune on development clips if the check interval, camera or scenes change,
+and record the clips used here.
+
+#### Checking the gate on gesture clips
+
+`scripts/gate_check.py` compares runs over the same clip against annotated
+windows (a CSV of `label,onset_s,end_s` in source seconds): how many calls each
+run made, which windows got a call on a frame inside them and how long after
+onset, whether that answer names the gesture, and how many calls landed outside
+every window. It reads requests, not predictions, so it is a gate tuning aid,
+not the item 3d event scorer.
+
+```bash
+uv run python scripts/gate_check.py runs/<fixed-run> runs/<gated-run> \
+    --windows clip.windows.csv --tolerance-s 0.5
+```
+
+A Jester clip is 3 s of one gesture with nothing for a gate to skip.
+`uv run python scripts/jester_replay.py FRAMES_ROOT replay.avi` builds a replay
+(default 4 clips in 15 s segments at 12 fps) that holds each clip's first frame,
+then plays the clip, and writes `replay.windows.csv` next to it; `--clip-ids`
+rebuilds a given replay. The held stretch is a frozen frame and the cut into
+each clip is a scene change the gate should catch, so treat it as a functional
+check. Keep the frames, recordings and outputs local.
+
+### Scene state and predicted events (item 2b)
+
+Every policy runs the same derivation in `app/state.py`. A successful
+response is parsed into an observation (person visible, set of objects), the
+observation is compared with the confirmed scene, and each difference becomes
+one line in `predictions.jsonl`: `person_enters`, `person_leaves`,
+`object_placed` or `object_removed` (with `object`). The first observation only
+sets the scene; an unchanged or reworded scene emits nothing; a failed request,
+or text the parser cannot read (`observation_invalid` in the manifest counts),
+leaves the confirmed scene as it was.
+
+The parser is a stand-in until item 2c fixes the prompt and observation
+format. It reads the default prompt's answer ("Name the objects you see,
+separated by commas."), keeps each item's head noun (`red mug` and `mug` are the
+same object) and treats person words as presence. A custom `--prompt` whose
+answer is not a list produces no predictions.
+
+Pending work stays bounded: at most one request is in flight, the capture
+thread keeps only the newest frame, and a busy tick is skipped rather than
+queued, so slow inference never replays a backlog.
+
 ### Run directory
 
 File formats follow the item 2d contract in
@@ -226,13 +346,15 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   `tick_index`, integer `frame_id`, `source_kind`, `source_time_s`,
   `host_capture_s`, `host_tick_s`, `encode_s`, `image_bytes`. The app adds the
   statuses `client_exception` and `abandoned_at_shutdown`.
-- `drops.jsonl`: `origin` (`app` or `source`), `reason`
+- `drops.jsonl`: `origin` (`app`, `source` or `gate`), `reason`
   (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
-  `empty_frame`, `read_failed`), `frame_id`, host times
+  `empty_frame`, `read_failed`, `gate_no_change`, `gate_persisting`, `gate_cooldown`), `frame_id`, host times
 - `power.csv`: one row per sensor value on the shared host clock, with
   `source` = `windows_battery` (stored energy and discharge power, the
   qualified whole-laptop source) or `sysfs`. Unavailable readings are
   `valid=false` with an empty `value`, never `0`
+- `predictions.jsonl`: predicted events (item 2b) with the request, frame and
+  times they came from, including `available_source_time_s`
 - `manifest.json`: policy, config, source metadata (backend, requested vs
   observed size/fps, time method), AC/battery state at start and end, source
   end reason, run end reason, counts, platform
