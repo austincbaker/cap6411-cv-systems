@@ -250,6 +250,27 @@ fields plus `gate_reason`. The manifest records `policy` and the `gate`
 settings, and `counts` has one entry per reason. The default thresholds are
 starting points: tune them on development clips only.
 
+### Scene state and predicted events (item 2b)
+
+Every policy runs the same derivation in `app/state.py`. A successful
+response is parsed into an observation (person visible, set of objects), the
+observation is compared with the confirmed scene, and each difference becomes
+one line in `predictions.jsonl`: `person_enters`, `person_leaves`,
+`object_placed` or `object_removed` (with `object`). The first observation only
+sets the scene; an unchanged or reworded scene emits nothing; a failed request,
+or text the parser cannot read (`observation_invalid` in the manifest counts),
+leaves the confirmed scene as it was.
+
+The parser is a stand-in until item 2c fixes the prompt and observation
+format. It reads the default prompt's answer ("Name the objects you see,
+separated by commas."), keeps each item's head noun (`red mug` and `mug` are the
+same object) and treats person words as presence. A custom `--prompt` whose
+answer is not a list produces no predictions.
+
+Pending work stays bounded: at most one request is in flight, the capture
+thread keeps only the newest frame, and a busy tick is skipped rather than
+queued, so slow inference never replays a backlog.
+
 ### Run directory
 
 File formats follow the item 2d contract in
@@ -269,6 +290,8 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   `source` = `windows_battery` (stored energy and discharge power, the
   qualified whole-laptop source) or `sysfs`. Unavailable readings are
   `valid=false` with an empty `value`, never `0`
+- `predictions.jsonl`: predicted events (item 2b) with the request, frame and
+  times they came from, including `available_source_time_s`
 - `manifest.json`: policy, config, source metadata (backend, requested vs
   observed size/fps, time method), AC/battery state at start and end, source
   end reason, run end reason, counts, platform

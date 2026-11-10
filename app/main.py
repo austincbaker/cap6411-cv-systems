@@ -18,6 +18,7 @@ Run directory (``--run-dir``, default ``runs/<UTC time>_<source>/``):
   host request start / response-available times, status, text or error type)
 - ``drops.jsonl``     skipped ticks and frames the source dropped, with IDs and reasons
 - ``power.csv``       power/energy samples, one row per sensor reading
+- ``predictions.jsonl`` predicted events from the shared scene derivation (item 2b)
 - ``manifest.json``   config, source metadata, end reasons, counts, power state, platform
 
 All ``host_*`` times are ``time.monotonic()`` seconds in this process;
@@ -62,7 +63,7 @@ import cv2
 import httpx
 import numpy as np
 
-from app.state import ObservationState, render_overlay
+from app.state import SCENE_PROMPT, ObservationState, SceneState, render_overlay
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
 from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
@@ -72,6 +73,7 @@ from vlm.client import VLMClient, VLMConfig
 
 SCHEMA_VERSION = CONTRACT_VERSION
 POLICIES = ("fixed_interval", "gated")
+PREDICTIONS_FILE = "predictions.jsonl"
 WINDOW_NAME = "cap6411 baseline"
 SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
 
@@ -184,7 +186,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="configs/inference.json",
         help="inference profile (default configs/inference.json)",
     )
-    req.add_argument("--prompt", default="Describe the visible objects in one short sentence.")
+    req.add_argument(
+        "--prompt",
+        default=SCENE_PROMPT,
+        help="prompt per request (default: the object-list prompt the scene parser reads)",
+    )
     req.add_argument(
         "--max-tokens",
         type=positive_int,
@@ -463,10 +469,12 @@ class BaselineRun:
         self.requests_log = JsonlWriter(self.run_dir / RUN_FILES["request"])
         self.drops_log = JsonlWriter(self.run_dir / RUN_FILES["schedule"])
         self.power_log = CsvWriter(self.run_dir / RUN_FILES["power"], "power")
+        self.predictions_log = JsonlWriter(self.run_dir / PREDICTIONS_FILE)
         # source_factory(on_drop) lets tests inject a source wired to this run's drop log.
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
         self.state = ObservationState()
+        self.scene = SceneState()
         self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
@@ -758,9 +766,39 @@ class BaselineRun:
             host_capture_s=record["host_capture_s"],
             host_response_available_s=record["response_available_s"],
         )
+        if record["status"] == "ok":
+            self._derive_predictions(record)
         if record.get("server_state_unknown") and self.server_unknown_since is None:
             self.server_unknown_since = time.monotonic()
         self.in_flight = None
+
+    def _derive_predictions(self, record: dict) -> None:
+        """Shared event derivation (2b): difference the response against the confirmed scene."""
+        events = self.scene.update(record["text"])
+        if events is None:
+            self.state.bump("observation_invalid")  # confirmed scene left as it was
+            return
+        source_time = record["source_time_s"]
+        delay = record["response_available_s"] - record["host_capture_s"]
+        observation = self.scene.confirmed.as_dict()
+        for label, item in events:
+            self.state.bump(f"prediction:{label}")
+            self.predictions_log.write(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": self.run_id,
+                    "prediction_id": f"p{self.predictions_log.lines + 1:05d}",
+                    "label": label,
+                    "object": item,
+                    "request_id": record["request_id"],
+                    "frame_id": record["frame_id"],
+                    "source_time_s": source_time,
+                    "host_capture_s": record["host_capture_s"],
+                    "response_available_s": record["response_available_s"],
+                    "available_source_time_s": None if source_time is None else source_time + delay,
+                    "observation": observation,
+                }
+            )
 
     def _drain_results(self, timeout: float = 0.0) -> None:
         try:
@@ -960,7 +998,7 @@ class BaselineRun:
         (self.run_dir / "manifest.json").write_text(
             json.dumps(self.manifest, indent=2, default=str) + "\n"
         )
-        for log in (self.requests_log, self.drops_log, self.power_log):
+        for log in (self.requests_log, self.drops_log, self.power_log, self.predictions_log):
             log.close()
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
 
@@ -999,7 +1037,10 @@ class BaselineRun:
             "run_end_reason": self.run_end_reason,
             "exit_code": exit_code,
             "error_detail": self.error_detail,
-            "files": {kind: name for kind, name in RUN_FILES.items() if kind != "manifest"},
+            "files": {
+                **{kind: name for kind, name in RUN_FILES.items() if kind != "manifest"},
+                "prediction": PREDICTIONS_FILE,
+            },
             "power_state": self.power_state,
             "source": {"info": info, "end": self.source.end.as_dict() if self.source.end else None},
             "vlm": {

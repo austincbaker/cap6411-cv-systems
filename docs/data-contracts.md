@@ -63,8 +63,8 @@ Frame evidence, response availability and sensor sampling are separate times:
 | `annotations.csv` | James (1e, 2e) | scorer 3d | source | `annotation` |
 | `metrics.json` | scorer 3d (quality) and analyzer 3g (energy) | analyzer 3g, report | source and host | `metrics` |
 
-The first five files are written to one run directory. `predictions.jsonl`
-appears once 2b lands; until then the baseline app writes none. Annotations
+The first five files are written to one run directory. Every run writes
+`predictions.jsonl` (empty when nothing changed), for every policy. Annotations
 live in `data/annotations/`. Metrics are written next to the run or in an
 analysis output directory.
 
@@ -220,7 +220,8 @@ prediction.
 | `source_time_s` | float, *null* | frame evidence |
 | `host_capture_s`, `response_available_s` | float | host time |
 | `available_source_time_s` | float, *null* | see "Time bases"; *null* exactly when `source_time_s` is |
-| `observation`? | any | the validated observation behind it (format set in 2c) |
+| `object`? | str, *null* | the object for `object_placed` / `object_removed`; *null* for person events |
+| `observation`? | any | the observation behind it; until 2c this is `{person, objects}` from the stand-in parser |
 
 ### `metrics.json` (kind `metrics`)
 
