@@ -214,6 +214,42 @@ the request record). After one, the app sends nothing until llama-server's
 `tick_skipped_server_unknown`. If the server stays busy longer than
 `--server-idle-timeout-s`, the run ends with `server_not_idle` (exit 2).
 
+### Change gate (`--policy gated`, item 2a)
+
+`--policy gated` keeps the same tick grid but sends a tick's frame only when
+the change gate in `src/gates/change.py` triggers, so a gated run and a
+fixed-interval run over the same clip and `--interval-s` see the same
+candidate frames. With the gate, `--interval-s` is how often the gate looks
+(for example 0.5), not how often the VLM is called.
+
+```bash
+uv run python -m app.main --source replay --video clip.mp4 --policy gated \
+    --interval-s 0.5 --gate-threshold 0.05 --gate-min-interval-s 2 --no-display
+```
+
+Each frame is compared with the last frame sent to the VLM (the acknowledged
+reference), so a slow change keeps growing until it triggers. Frames are
+shrunk to 160x120 gray, blurred and mean-subtracted (a uniform lighting shift
+is not change). A pixel counts as changed when it moved more than
+`--gate-pixel-delta` (default 25 of 255); the score is the changed fraction of
+the most-changed cell in a `--gate-grid` x `--gate-grid` grid (default 4;
+1 is a global score). Per tick, in order:
+
+| Reason | Logged in | When |
+|---|---|---|
+| `tick_skipped_busy`, `tick_skipped_server_unknown` | `drops.jsonl`, origin `app` | as in fixed-interval runs; checked first |
+| `gate_initial` | `requests.jsonl` | first frame, no reference yet |
+| `gate_refresh` | `requests.jsonl` | `--gate-refresh-s` passed since the last call (off by default) |
+| `gate_no_change` | `drops.jsonl`, origin `gate` | score below `--gate-threshold` |
+| `gate_cooldown` | `drops.jsonl`, origin `gate` | changed, but within `--gate-min-interval-s` of the last call |
+| `gate_change` | `requests.jsonl` | otherwise |
+
+Gate skips carry `gate_score`, `gate_global_score` and `gate_compute_s` (time
+spent scoring, for gate-overhead accounting); sent requests carry the same
+fields plus `gate_reason`. The manifest records `policy` and the `gate`
+settings, and `counts` has one entry per reason. The default thresholds are
+starting points: tune them on development clips only.
+
 ### Run directory
 
 File formats follow the item 2d contract in
@@ -226,9 +262,9 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   `tick_index`, integer `frame_id`, `source_kind`, `source_time_s`,
   `host_capture_s`, `host_tick_s`, `encode_s`, `image_bytes`. The app adds the
   statuses `client_exception` and `abandoned_at_shutdown`.
-- `drops.jsonl`: `origin` (`app` or `source`), `reason`
+- `drops.jsonl`: `origin` (`app`, `source` or `gate`), `reason`
   (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
-  `empty_frame`, `read_failed`), `frame_id`, host times
+  `empty_frame`, `read_failed`, `gate_no_change`, `gate_cooldown`), `frame_id`, host times
 - `power.csv`: one row per sensor value on the shared host clock, with
   `source` = `windows_battery` (stored energy and discharge power, the
   qualified whole-laptop source) or `sysfs`. Unavailable readings are

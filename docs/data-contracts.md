@@ -112,7 +112,8 @@ may be missing (`null` or an empty cell).
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
-| `policy` | str | `fixed_interval` now; later `idle`, `matched_invocation`, `gated`, `budget` |
+| `policy` | str | `fixed_interval` or `gated` now; later `idle`, `matched_invocation`, `budget` |
+| `gate` | object, *null* | gate settings (`threshold`, `pixel_delta`, `grid`, `min_interval_s`, `refresh_s`, `width`, `height`) for `gated`; *null* otherwise |
 | `run_dir` | str | |
 | `argv` | list, *null* | command-line arguments |
 | `config` | object | resolved app settings |
@@ -147,6 +148,7 @@ One line per VLM request the app sent, including failed and abandoned ones.
 | `text` | str, *null* | nonempty when `status` is `ok` |
 | `error` | str, *null* | required when `status` is not `ok` |
 | `server_state_unknown` | bool | true when the server may still be working on it |
+| `gate_reason`? `gate_score`? `gate_global_score`? `gate_compute_s`? | | `gated` runs: why the gate sent it (`gate_initial`, `gate_change`, `gate_refresh`) and its score |
 | `elapsed_s`? `model`? `max_output_tokens`? `prompt_tokens`? `output_tokens`? `cached_tokens`? `finish_reason`? `http_status`? `encode_s`? `image_bytes`? | | client statistics; *null* when the server did not report them |
 
 ### `drops.jsonl` (kind `schedule`)
@@ -156,11 +158,12 @@ Every tick that did not send a request and every frame the source dropped.
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
-| `origin` | str | `app` (scheduler), `source` (capture) or `gate` (reserved for 2a) |
-| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`, `empty_frame`, `read_failed`; 2a will add gate reasons |
+| `origin` | str | `app` (scheduler), `source` (capture) or `gate` (change gate, 2a) |
+| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`, `empty_frame`, `read_failed`; origin `gate`: `gate_no_change`, `gate_cooldown` |
 | `frame_id` | int, *null* | |
 | `host_time_s` | float | when it was logged |
 | `tick_index`? `host_tick_s`? `source_time_s`? `in_flight_frame_id`? `detail`? | | |
+| `gate_score`? `gate_global_score`? `gate_compute_s`? | float, *null* | gate skips: most-changed cell and global changed fractions, scoring time |
 
 ### `power.csv` (kind `power`)
 

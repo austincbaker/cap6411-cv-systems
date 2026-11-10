@@ -4,7 +4,9 @@
     python -m app.main --source webcam --device 0 --interval-s 2 --duration-s 60
 
 Every ``--interval-s`` seconds (ticks at ``t0 + k * interval`` on the monotonic
-clock, no drift) the newest source frame is sent to the VLM. At most one
+clock, no drift) the newest source frame is sent to the VLM. With
+``--policy gated`` (item 2a) a tick is sent only when ``gates.ChangeGate``
+triggers; gate skips go to ``drops.jsonl`` with origin ``gate``. At most one
 request is in flight. A tick that fires while a request is still running is
 skipped and logged as ``tick_skipped_busy`` with the frame ID it would have
 sent; nothing is queued. Source acquisition runs on its own thread, so slow
@@ -65,10 +67,11 @@ from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError,
 from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
 from energy.windows import WindowsBatteryReader
+from gates import ChangeGate, GateConfig
 from vlm.client import VLMClient, VLMConfig
 
 SCHEMA_VERSION = CONTRACT_VERSION
-POLICY = "fixed_interval"
+POLICIES = ("fixed_interval", "gated")
 WINDOW_NAME = "cap6411 baseline"
 SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
 
@@ -133,9 +136,46 @@ def build_parser() -> argparse.ArgumentParser:
         help="seconds between VLM invocations (default 2)",
     )
     sched.add_argument(
+        "--policy",
+        choices=POLICIES,
+        default="fixed_interval",
+        help="fixed_interval sends every tick; gated sends a tick only when the change gate triggers",
+    )
+    sched.add_argument(
         "--duration-s",
         type=positive_float,
         help="stop after this many seconds (default: until EOF / q / Ctrl-C)",
+    )
+
+    gate = parser.add_argument_group("gate (--policy gated)")
+    gate.add_argument(
+        "--gate-threshold",
+        type=positive_float,
+        default=GateConfig.threshold,
+        help=f"changed fraction of the most-changed cell that triggers (default {GateConfig.threshold})",
+    )
+    gate.add_argument(
+        "--gate-pixel-delta",
+        type=int,
+        default=GateConfig.pixel_delta,
+        help=f"brightness change 0-255 that marks a pixel changed (default {GateConfig.pixel_delta})",
+    )
+    gate.add_argument(
+        "--gate-grid",
+        type=positive_int,
+        default=GateConfig.grid,
+        help=f"cells per side for the regional score; 1 = global (default {GateConfig.grid})",
+    )
+    gate.add_argument(
+        "--gate-min-interval-s",
+        type=nonnegative_float,
+        default=GateConfig.min_interval_s,
+        help="minimum seconds between gate triggers (default 0)",
+    )
+    gate.add_argument(
+        "--gate-refresh-s",
+        type=positive_float,
+        help="force a call after this many seconds without one (default: never)",
     )
 
     req = parser.add_argument_group("request")
@@ -200,7 +240,21 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--source replay requires --video PATH")
     if args.source == "webcam" and args.video:
         parser.error("--video is only valid with --source replay")
+    try:
+        args.gate_config = gate_config(args)
+    except ValueError as exc:
+        parser.error(f"gate: {exc}")
     return args
+
+
+def gate_config(config: argparse.Namespace) -> GateConfig:
+    return GateConfig(
+        threshold=config.gate_threshold,
+        pixel_delta=config.gate_pixel_delta,
+        min_interval_s=config.gate_min_interval_s,
+        refresh_s=config.gate_refresh_s,
+        grid=config.gate_grid,
+    )
 
 
 # ============================================================================ builders
@@ -413,6 +467,7 @@ class BaselineRun:
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
         self.state = ObservationState()
+        self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
         self.results: "queue.Queue[dict]" = queue.Queue()
@@ -505,9 +560,16 @@ class BaselineRun:
             self.results.put(self._execute(*job))
 
     def _execute(
-        self, frame: Frame, jpeg: bytes, encode_s: float, tick_index: int, host_tick_s: float
+        self,
+        frame: Frame,
+        jpeg: bytes,
+        encode_s: float,
+        tick_index: int,
+        host_tick_s: float,
+        gate_fields: Optional[dict] = None,
     ) -> dict:
         app_fields = {
+            **(gate_fields or {}),
             "schema_version": SCHEMA_VERSION,
             "run_id": self.run_id,
             "tick_index": tick_index,
@@ -660,14 +722,20 @@ class BaselineRun:
         )
 
     def _log_tick_drop(
-        self, reason: str, tick_index: int, host_tick_s: float, frame: Frame, **extra: Any
+        self,
+        reason: str,
+        tick_index: int,
+        host_tick_s: float,
+        frame: Frame,
+        origin: str = "app",
+        **extra: Any,
     ) -> None:
         self.state.bump(reason)
         self.drops_log.write(
             {
                 "schema_version": SCHEMA_VERSION,
                 "run_id": self.run_id,
-                "origin": "app",
+                "origin": origin,
                 "reason": reason,
                 "tick_index": tick_index,
                 "host_tick_s": host_tick_s,
@@ -750,8 +818,25 @@ class BaselineRun:
                             "after a request with unknown server state"
                         )
                         self.source.stop()
+                elif (
+                    decision := self._gate_decision(frame, now)
+                ) is not None and not decision.trigger:
+                    self.server_unknown_since = None
+                    self._log_tick_drop(
+                        decision.reason,
+                        tick_index,
+                        next_tick,
+                        frame,
+                        origin="gate",
+                        **{k: v for k, v in decision.log_fields().items() if k != "gate_reason"},
+                    )
                 else:
                     self.server_unknown_since = None
+                    gate_fields = None
+                    if decision is not None:
+                        self.gate.acknowledge(decision, now)
+                        self.state.bump(decision.reason)
+                        gate_fields = decision.log_fields()
                     encode_start = time.monotonic()
                     jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
                     encode_s = time.monotonic() - encode_start
@@ -766,7 +851,9 @@ class BaselineRun:
                         "request_started_s": time.monotonic(),
                     }
                     self.state.record_dispatch(frame.frame_id)
-                    self.jobs.put_nowait((frame, jpeg, encode_s, tick_index, next_tick))
+                    self.jobs.put_nowait(
+                        (frame, jpeg, encode_s, tick_index, next_tick, gate_fields)
+                    )
                 # A late tick is still handled once, on the next pass; host_tick_s keeps its scheduled time.
                 tick_index += 1
                 next_tick = tick_origin + tick_index * interval
@@ -777,6 +864,10 @@ class BaselineRun:
 
             wait = max(0.0, min(next_tick - time.monotonic(), 0.02 if self.display else 0.05))
             self._drain_results(timeout=wait)
+
+    def _gate_decision(self, frame: Frame, now: float):
+        """The gate's verdict on this tick's frame, or None under fixed_interval."""
+        return None if self.gate is None else self.gate.decide(frame.image, now)
 
     def _draw(self) -> None:
         frame = self.slot.latest()
@@ -889,10 +980,11 @@ class BaselineRun:
         return {
             "schema_version": SCHEMA_VERSION,
             "run_id": self.run_id,
-            "policy": POLICY,
+            "policy": self.config.policy,
+            "gate": None if self.gate is None else self.gate.config.as_dict(),
             "run_dir": str(self.run_dir),
             "argv": self.argv,
-            "config": {k: v for k, v in vars(self.config).items()},
+            "config": {k: v for k, v in vars(self.config).items() if k != "gate_config"},
             "started_wall_utc": self.started_wall_utc,
             "time_bases": {
                 "host_*": "time.monotonic() seconds in this process",

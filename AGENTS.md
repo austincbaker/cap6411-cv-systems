@@ -33,12 +33,12 @@
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
   Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`,
-  `src/contracts/`, `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
+  `src/contracts/`, `src/gates/`, `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
   Setuptools discovers packages under `src/`; imports are `vlm`, `energy`,
-  `capture` and `contracts`, not `src.vlm` etc.
+  `capture`, `contracts` and `gates`, not `src.vlm` etc.
   `app/` is not a package under `src/`; run it from the repository root.
   `tests/fixtures/contracts/` holds the item 2d contract fixtures.
-  `src/gates/`, `src/evaluation/`, `experiments/` and `data/` remain proposed
+  `src/evaluation/`, `experiments/` and `data/` remain proposed
   until their items are implemented.
 - **Key contracts:** `docs/data-contracts.md` (item `2d`, version `1-draft`
   until James and Shawn sign off) is the authoritative file contract:
@@ -67,8 +67,8 @@ rather than duplicating it once those steps exist.
   documents `WindowsBatteryReader` and the owner-authorized unplugged
   `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
   qualified Windows battery source and WSL sysfs scale limitation. The fixed-interval
-  application is `uv run python -m app.main` (item `1d`); see the README's
-  "Capture and baseline" section. Check run files against the item `2d`
+  application is `uv run python -m app.main` (item `1d`); `--policy gated` adds the
+  item `2a` change gate. See the README's "Capture and baseline" section. Check run files against the item `2d`
   contract with `uv run contracts-check RUN_DIR`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
