@@ -69,7 +69,8 @@ rather than duplicating it once those steps exist.
   qualified Windows battery source and WSL sysfs scale limitation. The fixed-interval
   application is `uv run python -m app.main` (item `1d`); `--policy gated` adds the
   item `2a` change gate. See the README's "Capture and baseline" section. Check run files against the item `2d`
-  contract with `uv run contracts-check RUN_DIR`.
+  contract with `uv run contracts-check RUN_DIR`. Gate checks on gesture clips use
+  `scripts/jester_replay.py` and `scripts/gate_check.py` (README, "Change gate").
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
   artifact locations are documented in the README. Python package installation

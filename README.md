@@ -250,6 +250,28 @@ fields plus `gate_reason`. The manifest records `policy` and the `gate`
 settings, and `counts` has one entry per reason. The default thresholds are
 starting points: tune them on development clips only.
 
+#### Checking the gate on gesture clips
+
+`scripts/gate_check.py` compares runs over the same clip against annotated
+windows (a CSV of `label,onset_s,end_s` in source seconds): how many calls each
+run made, which windows got a call on a frame inside them and how long after
+onset, whether that answer names the gesture, and how many calls landed outside
+every window. It reads requests, not predictions, so it is a gate tuning aid,
+not the item 3d event scorer.
+
+```bash
+uv run python scripts/gate_check.py runs/<fixed-run> runs/<gated-run> \
+    --windows clip.windows.csv --tolerance-s 0.5
+```
+
+A Jester clip is 3 s of one gesture with nothing for a gate to skip.
+`uv run python scripts/jester_replay.py FRAMES_ROOT replay.avi` builds a replay
+(default 4 clips in 15 s segments at 12 fps) that holds each clip's first frame,
+then plays the clip, and writes `replay.windows.csv` next to it; `--clip-ids`
+rebuilds a given replay. The held stretch is a frozen frame and the cut into
+each clip is a scene change the gate should catch, so treat it as a functional
+check. Keep the frames, recordings and outputs local.
+
 ### Scene state and predicted events (item 2b)
 
 Every policy runs the same derivation in `app/state.py`. A successful
