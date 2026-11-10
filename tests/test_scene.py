@@ -84,7 +84,23 @@ def test_gated_and_fixed_runs_share_the_derivation(tmp_path):
     clip = write_event_clip(tmp_path / "desk.avi", seconds=3.0)
     llama = FakeLlama(texts=["a laptop", "a laptop, a mug"])
     _, result = run_baseline(
-        config_for(tmp_path, "--interval-s", "0.25", "--policy", "gated", video=clip), llama
+        config_for(
+            tmp_path,
+            "--interval-s",
+            "0.25",
+            "--policy",
+            "gated",
+            *(
+                "--gate-threshold",
+                "0.05",
+                "--gate-persist-checks",
+                "1",
+                "--gate-min-interval-s",
+                "0",
+            ),
+            video=clip,
+        ),
+        llama,
     )
     predictions = read_jsonl(result.run_dir / "predictions.jsonl")
     assert [(p["label"], p["object"]) for p in predictions] == [("object_placed", "mug")]

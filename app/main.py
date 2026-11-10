@@ -154,7 +154,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--gate-threshold",
         type=positive_float,
         default=GateConfig.threshold,
-        help=f"changed fraction of the most-changed cell that triggers (default {GateConfig.threshold})",
+        help=f"changed fraction of the most-changed cell that starts a change (default {GateConfig.threshold})",
+    )
+    gate.add_argument(
+        "--gate-persist-checks",
+        type=positive_int,
+        default=GateConfig.persist_checks,
+        help=f"gate checks in a row a change must last before it triggers (default {GateConfig.persist_checks})",
+    )
+    gate.add_argument(
+        "--gate-release-threshold",
+        type=positive_float,
+        help="score that keeps a started change alive, at most --gate-threshold (default: the threshold)",
     )
     gate.add_argument(
         "--gate-pixel-delta",
@@ -172,7 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--gate-min-interval-s",
         type=nonnegative_float,
         default=GateConfig.min_interval_s,
-        help="minimum seconds between gate triggers (default 0)",
+        help=f"minimum seconds between gate triggers (default {GateConfig.min_interval_s:g})",
     )
     gate.add_argument(
         "--gate-refresh-s",
@@ -260,6 +271,8 @@ def gate_config(config: argparse.Namespace) -> GateConfig:
         min_interval_s=config.gate_min_interval_s,
         refresh_s=config.gate_refresh_s,
         grid=config.gate_grid,
+        persist_checks=config.gate_persist_checks,
+        release_threshold=config.gate_release_threshold,
     )
 
 

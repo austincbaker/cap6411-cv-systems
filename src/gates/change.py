@@ -13,18 +13,28 @@ set of cells, and the score is the changed fraction of the most-changed cell,
 so a small object placed in one corner is not diluted by the whole frame.
 ``grid=1`` gives a single global score.
 
+Persistence and hysteresis: each :meth:`ChangeGate.decide` call is one check.
+A change starts when the score reaches ``threshold`` and stays alive while it
+is at least ``release_threshold`` (hysteresis; defaults to ``threshold``); it
+must stay alive for ``persist_checks`` checks in a row before it triggers, so
+a movement that comes and goes (a head turn, someone shifting in a chair) is
+skipped while a change that stays (a gesture held, an object placed) is sent,
+from a frame where it has settled.
+
 Decision for a candidate frame at host time ``now_s``:
 
 1. no reference yet                      -> trigger ``gate_initial``
 2. ``refresh_s`` since the last trigger  -> trigger ``gate_refresh``
-3. score below ``threshold``             -> skip ``gate_no_change``
-4. within ``min_interval_s`` of the last trigger -> skip ``gate_cooldown``
-5. otherwise                             -> trigger ``gate_change``
+3. score below the threshold (``release_threshold`` once a change has
+   started)                              -> skip ``gate_no_change``
+4. changed for fewer than ``persist_checks`` checks -> skip ``gate_persisting``
+5. within ``min_interval_s`` of the last trigger -> skip ``gate_cooldown``
+6. otherwise                             -> trigger ``gate_change``
 
 The caller calls :meth:`ChangeGate.acknowledge` with the decision once the
-frame is really sent, which moves the reference and the cooldown clock. A
-trigger that could not be sent (the VLM was busy) changes nothing, so the
-next candidate is judged against the same reference.
+frame is really sent, which moves the reference and the cooldown clock and
+ends the change. A trigger that could not be sent (the VLM was busy) changes
+nothing, so the next candidate is judged against the same reference.
 """
 
 from __future__ import annotations
@@ -37,22 +47,30 @@ import cv2
 import numpy as np
 
 TRIGGER_REASONS = ("gate_initial", "gate_refresh", "gate_change")
-SKIP_REASONS = ("gate_no_change", "gate_cooldown")
+SKIP_REASONS = ("gate_no_change", "gate_persisting", "gate_cooldown")
 
 
 @dataclass(frozen=True)
 class GateConfig:
-    threshold: float = 0.05  # changed fraction of the most-changed cell that triggers
+    # threshold, persist_checks and min_interval_s were chosen on development clips (README,
+    # "Choosing the gate settings") for 0.5 s gate checks; retune for another check interval.
+    threshold: float = 0.3  # changed fraction of the most-changed cell that starts a change
     pixel_delta: int = 25  # brightness change (0-255) that marks a pixel as changed
-    min_interval_s: float = 0.0  # cooldown between triggers
+    min_interval_s: float = 2.0  # cooldown between triggers
     refresh_s: Optional[float] = None  # forced call after this long without one; None = never
     grid: int = 4  # cells per side for the regional score
+    persist_checks: int = 3  # checks in a row a change must last before it triggers
+    release_threshold: Optional[float] = None  # keeps a started change alive; None = threshold
     width: int = 160
     height: int = 120
 
     def __post_init__(self) -> None:
         if not 0 < self.threshold <= 1:
             raise ValueError("threshold must be in (0, 1]")
+        if self.persist_checks < 1:
+            raise ValueError("persist_checks must be >= 1")
+        if self.release_threshold is not None and not 0 < self.release_threshold <= self.threshold:
+            raise ValueError("release_threshold must be in (0, threshold]")
         if not 0 <= self.pixel_delta < 255:
             raise ValueError("pixel_delta must be in [0, 255)")
         if self.min_interval_s < 0:
@@ -110,6 +128,7 @@ class ChangeGate:
         self._clock = clock  # for compute_s only; decisions use the caller's now_s
         self.reference: Optional[np.ndarray] = None
         self.last_trigger_s: Optional[float] = None
+        self.streak = 0  # checks in a row the current change has lasted
 
     def decide(self, image: np.ndarray, now_s: float) -> GateDecision:
         cfg = self.config
@@ -125,12 +144,19 @@ class ChangeGate:
             reason = "gate_initial"
         elif cfg.refresh_s is not None and since is not None and since >= cfg.refresh_s:
             reason = "gate_refresh"
-        elif score < cfg.threshold:
-            reason = "gate_no_change"
-        elif since is not None and since < cfg.min_interval_s:
-            reason = "gate_cooldown"
         else:
-            reason = "gate_change"
+            release = cfg.threshold if cfg.release_threshold is None else cfg.release_threshold
+            if score < (cfg.threshold if self.streak == 0 else release):
+                self.streak = 0
+                reason = "gate_no_change"
+            else:
+                self.streak += 1
+                if self.streak < cfg.persist_checks:
+                    reason = "gate_persisting"
+                elif since is not None and since < cfg.min_interval_s:
+                    reason = "gate_cooldown"
+                else:
+                    reason = "gate_change"
         return GateDecision(
             trigger=reason in TRIGGER_REASONS,
             reason=reason,
@@ -144,3 +170,4 @@ class ChangeGate:
         """The frame behind ``decision`` was sent: it becomes the reference."""
         self.reference = decision.processed
         self.last_trigger_s = now_s
+        self.streak = 0

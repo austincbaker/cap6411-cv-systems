@@ -224,7 +224,7 @@ candidate frames. With the gate, `--interval-s` is how often the gate looks
 
 ```bash
 uv run python -m app.main --source replay --video clip.mp4 --policy gated \
-    --interval-s 0.5 --gate-threshold 0.05 --gate-min-interval-s 2 --no-display
+    --interval-s 0.5 --no-display
 ```
 
 Each frame is compared with the last frame sent to the VLM (the acknowledged
@@ -233,22 +233,63 @@ shrunk to 160x120 gray, blurred and mean-subtracted (a uniform lighting shift
 is not change). A pixel counts as changed when it moved more than
 `--gate-pixel-delta` (default 25 of 255); the score is the changed fraction of
 the most-changed cell in a `--gate-grid` x `--gate-grid` grid (default 4;
-1 is a global score). Per tick, in order:
+1 is a global score). A change starts when the score reaches `--gate-threshold`
+(default 0.3) and must last `--gate-persist-checks` checks in a row (default 3,
+so 1 s at 0.5 s checks) before it is sent, so a movement that comes and goes,
+like a head turn, is skipped and the frame sent shows the change once it has
+settled. `--gate-release-threshold` (off by default) adds hysteresis: a started
+change stays alive while the score is at least that value. Per tick, in order:
 
 | Reason | Logged in | When |
 |---|---|---|
 | `tick_skipped_busy`, `tick_skipped_server_unknown` | `drops.jsonl`, origin `app` | as in fixed-interval runs; checked first |
 | `gate_initial` | `requests.jsonl` | first frame, no reference yet |
 | `gate_refresh` | `requests.jsonl` | `--gate-refresh-s` passed since the last call (off by default) |
-| `gate_no_change` | `drops.jsonl`, origin `gate` | score below `--gate-threshold` |
-| `gate_cooldown` | `drops.jsonl`, origin `gate` | changed, but within `--gate-min-interval-s` of the last call |
+| `gate_no_change` | `drops.jsonl`, origin `gate` | score below `--gate-threshold` (below `--gate-release-threshold` once a change has started) |
+| `gate_persisting` | `drops.jsonl`, origin `gate` | changed for fewer than `--gate-persist-checks` checks in a row |
+| `gate_cooldown` | `drops.jsonl`, origin `gate` | changed long enough, but within `--gate-min-interval-s` (default 2) of the last call |
 | `gate_change` | `requests.jsonl` | otherwise |
 
 Gate skips carry `gate_score`, `gate_global_score` and `gate_compute_s` (time
 spent scoring, for gate-overhead accounting); sent requests carry the same
 fields plus `gate_reason`. The manifest records `policy` and the `gate`
-settings, and `counts` has one entry per reason. The default thresholds are
-starting points: tune them on development clips only.
+settings, and `counts` has one entry per reason.
+
+#### Choosing the gate settings
+
+The defaults were chosen on development clips only: James's `real_thumbs_1`
+(9.7 min, two thumbs-ups) and his four short gesture clips plus a control.
+`real_thumbs_2` (8.8 min, one annotated thumbs-up) was held out and checked
+once with the chosen setting. On `real_thumbs_1`, ordinary movement scores
+0.02 (median) to 0.40 (99th percentile) and a thumbs-up peaks at 0.68 to
+0.75. The old default (threshold 0.05, no persistence) fired on head movement
+and made more calls than fixed 2 s sampling. Threshold 0.3 with 3 checks
+caught every gesture with 82% fewer calls than fixed sampling on
+`real_thumbs_1`; 0.4 cut calls further but leaves less margin under the
+gestures' scores. Hysteresis only added calls on these clips, so it is off.
+These clips have no object events: a small object such as a mug can cover
+less than a third of a grid cell and score below 0.3, so check clips with
+objects (or try `--gate-grid 8`) before relying on the defaults for
+`object_placed` and `object_removed`.
+
+| Clip (role) | Fixed 2 s calls | Gated calls | Gestures caught (fixed, gated) |
+|---|---|---|---|
+| `real_thumbs_1` (development) | 147 | 27 | 2/2, 2/2 |
+| `real_thumbs_2` (held out) | 133 | 28 | 1/1, 1/1 |
+| Jester thumbs-up replay, 60 s | 15 | 8 | 3/4, 4/4 |
+
+These come from `scripts/gate_sweep.py`, which decodes a clip once, samples the
+newest frame at every 0.5 s tick, runs the real gate for each setting and
+models inference as a fixed 2.5 s busy time (the Mac mini measured 2.5 to
+2.7 s per call):
+
+```bash
+uv run python scripts/gate_sweep.py clip.mov --windows clip.windows.csv \
+    --tolerance-s 0.5 --thresholds 0.1,0.2,0.3,0.4 --persist 1,2,3,4
+```
+
+Retune on development clips if the check interval, camera or scenes change,
+and record the clips used here.
 
 #### Checking the gate on gesture clips
 
@@ -307,7 +348,7 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   statuses `client_exception` and `abandoned_at_shutdown`.
 - `drops.jsonl`: `origin` (`app`, `source` or `gate`), `reason`
   (`tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`,
-  `empty_frame`, `read_failed`, `gate_no_change`, `gate_cooldown`), `frame_id`, host times
+  `empty_frame`, `read_failed`, `gate_no_change`, `gate_persisting`, `gate_cooldown`), `frame_id`, host times
 - `power.csv`: one row per sensor value on the shared host clock, with
   `source` = `windows_battery` (stored energy and discharge power, the
   qualified whole-laptop source) or `sysfs`. Unavailable readings are

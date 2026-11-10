@@ -8,7 +8,9 @@ import re
 import cv2
 import numpy as np
 
+from gates import GateConfig
 from scripts.gate_check import check_run, main, read_windows
+from scripts.gate_sweep import sample_ticks, score, simulate
 from scripts.jester_replay import build, choose_clips, still_start
 
 
@@ -111,3 +113,23 @@ def test_tolerance_widens_both_edges(tmp_path, capsys):
     args = [str(tmp_path / "run"), "--windows", str(tmp_path / "w.csv"), "--tolerance-s", "0.5"]
     assert main(args + ["--json"]) == 0
     assert json.loads(capsys.readouterr().out)[0]["windows"][0]["calls"] == 2
+
+
+def test_gate_sweep_models_busy_time_and_scores_windows(tmp_path):
+    clip = tmp_path / "clip.avi"
+    writer = cv2.VideoWriter(str(clip), cv2.VideoWriter_fourcc(*"MJPG"), 10.0, (64, 48))
+    for index in range(100):  # 10 s; a bright block from 4 s to 7 s
+        frame = np.full((48, 64, 3), 100, np.uint8)
+        if 40 <= index < 70:
+            frame[10:40, 10:40] = 250
+        writer.write(frame)
+    writer.release()
+    ticks = sample_ticks(clip, 0.5, (32, 24))
+    assert len(ticks) == 20 and ticks[0][0] == 0.0
+    config = GateConfig(threshold=0.2, persist_checks=2, width=32, height=24, grid=2)
+    sent = simulate(ticks, 0.5, 1.0, config)
+    assert sent == [0.0, 4.5, 7.5]  # first frame, then the second check of each change
+    fixed = simulate(ticks, 0.5, 2.5, None, fixed_interval_s=1.0)
+    assert fixed == [0.0, 3.0, 6.0, 9.0]  # busy 2.5 s skips every other 1 s tick
+    result = score(sent, [{"label": "x", "onset_s": 4.0, "end_s": 7.0}], 0.0, 10.0)
+    assert result["windows_caught"] == 1 and result["outside_calls"] == 2

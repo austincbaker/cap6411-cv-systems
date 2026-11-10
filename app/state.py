@@ -165,7 +165,9 @@ class ObservationState:
         if self.in_flight_frame_id is not None:
             lines.append(f"in flight: frame {self.in_flight_frame_id}")
         skipped = self.counts.get("tick_skipped_busy", 0)
-        gated = self.counts.get("gate_no_change", 0) + self.counts.get("gate_cooldown", 0)
+        gated = sum(
+            self.counts.get(k, 0) for k in ("gate_no_change", "gate_persisting", "gate_cooldown")
+        )
         lines.append(
             f"requests {self.counts.get('requests', 0)}  skipped(busy) {skipped}  skipped(gate) {gated}"
         )

@@ -159,7 +159,7 @@ Every tick that did not send a request and every frame the source dropped.
 |---|---|---|
 | `schema_version`, `run_id` | str | |
 | `origin` | str | `app` (scheduler), `source` (capture) or `gate` (change gate, 2a) |
-| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`, `empty_frame`, `read_failed`; origin `gate`: `gate_no_change`, `gate_cooldown` |
+| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`, `empty_frame`, `read_failed`; origin `gate`: `gate_no_change`, `gate_persisting`, `gate_cooldown` |
 | `frame_id` | int, *null* | |
 | `host_time_s` | float | when it was logged |
 | `tick_index`? `host_tick_s`? `source_time_s`? `in_flight_frame_id`? `detail`? | | |

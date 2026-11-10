@@ -47,6 +47,13 @@ def test_small_local_object_shows_in_the_cell_score_not_the_global_one():
     assert global_only == pytest.approx(overall)
 
 
+def raw(**overrides):
+    """The bare mechanism (no persistence or cooldown) unless a test sets them."""
+    return GateConfig(
+        **{"threshold": 0.05, "persist_checks": 1, "min_interval_s": 0.0, **overrides}
+    )
+
+
 def decide(gate, image, t):
     d = gate.decide(image, t)
     if d.trigger:
@@ -55,13 +62,13 @@ def decide(gate, image, t):
 
 
 def test_first_frame_triggers_then_unchanged_frames_skip():
-    gate = ChangeGate(GateConfig())
+    gate = ChangeGate(raw())
     assert decide(gate, desk(), 0.0) == "gate_initial"
     assert [decide(gate, desk(), t) for t in (0.5, 1.0, 1.5)] == ["gate_no_change"] * 3
 
 
 def test_change_triggers_and_becomes_the_new_reference():
-    gate = ChangeGate(GateConfig())
+    gate = ChangeGate(raw())
     decide(gate, desk(), 0.0)
     placed = desk(box=(60, 40, 30, 30))
     assert decide(gate, placed, 1.0) == "gate_change"
@@ -70,7 +77,7 @@ def test_change_triggers_and_becomes_the_new_reference():
 
 
 def test_cooldown_skips_a_change_until_the_minimum_interval_passes():
-    gate = ChangeGate(GateConfig(min_interval_s=3.0))
+    gate = ChangeGate(raw(min_interval_s=3.0))
     decide(gate, desk(), 0.0)
     placed = desk(box=(60, 40, 30, 30))
     assert decide(gate, placed, 1.0) == "gate_cooldown"
@@ -78,7 +85,7 @@ def test_cooldown_skips_a_change_until_the_minimum_interval_passes():
 
 
 def test_refresh_forces_a_call_without_change():
-    gate = ChangeGate(GateConfig(refresh_s=10.0))
+    gate = ChangeGate(raw(refresh_s=10.0))
     decide(gate, desk(), 0.0)
     assert decide(gate, desk(), 9.9) == "gate_no_change"
     assert decide(gate, desk(), 10.0) == "gate_refresh"
@@ -86,7 +93,7 @@ def test_refresh_forces_a_call_without_change():
 
 
 def test_a_trigger_that_was_not_sent_keeps_the_old_reference():
-    gate = ChangeGate(GateConfig())
+    gate = ChangeGate(raw())
     decide(gate, desk(), 0.0)
     placed = desk(box=(60, 40, 30, 30))
     assert gate.decide(placed, 1.0).reason == "gate_change"  # not acknowledged (VLM busy)
@@ -94,16 +101,63 @@ def test_a_trigger_that_was_not_sent_keeps_the_old_reference():
 
 
 def test_gradual_change_accumulates_against_the_acknowledged_reference():
-    gate = ChangeGate(GateConfig(threshold=0.3))
+    gate = ChangeGate(raw(threshold=0.3))
     decide(gate, desk(), 0.0)
     reasons = [decide(gate, desk(box=(60, 40, 6 * k, 30)), float(k)) for k in range(1, 8)]
     assert reasons[0] == "gate_no_change"  # each step alone is too small...
     assert "gate_change" in reasons  # ...but the total against the reference is not
 
 
+def test_persistence_skips_a_change_that_comes_and_goes():
+    gate = ChangeGate(raw(persist_checks=3))
+    decide(gate, desk(), 0.0)
+    moved = desk(box=(60, 40, 30, 30))
+    # Two checks of change, then back to the reference: never sent.
+    assert [decide(gate, img, t) for img, t in ((moved, 0.5), (moved, 1.0), (desk(), 1.5))] == [
+        "gate_persisting",
+        "gate_persisting",
+        "gate_no_change",
+    ]
+    # A change that stays is sent on its third check, then ends.
+    reasons = [decide(gate, moved, t) for t in (2.0, 2.5, 3.0, 3.5)]
+    assert reasons == ["gate_persisting", "gate_persisting", "gate_change", "gate_no_change"]
+
+
+def test_hysteresis_keeps_a_started_change_alive_below_the_threshold():
+    big, faint = desk(box=(60, 40, 30, 30)), desk(box=(60, 40, 30, 12))
+    start, _ = scores(desk(), big)
+    weak, _ = scores(desk(), faint)
+    assert weak < start  # the faint frame alone would not start a change
+    threshold = (weak + start) / 2
+    plain = ChangeGate(raw(threshold=threshold, persist_checks=2))
+    held = ChangeGate(raw(threshold=threshold, persist_checks=2, release_threshold=weak))
+    for gate in (plain, held):
+        decide(gate, desk(), 0.0)
+        assert decide(gate, big, 0.5) == "gate_persisting"
+    assert decide(plain, faint, 1.0) == "gate_no_change"  # change broken off
+    assert decide(held, faint, 1.0) == "gate_change"  # still alive above the release level
+
+
+def test_cooldown_applies_after_persistence():
+    gate = ChangeGate(raw(persist_checks=2, min_interval_s=3.0))
+    decide(gate, desk(), 0.0)
+    moved = desk(box=(60, 40, 30, 30))
+    reasons = [decide(gate, moved, t) for t in (0.5, 1.0, 2.0, 3.0)]
+    assert reasons == ["gate_persisting", "gate_cooldown", "gate_cooldown", "gate_change"]
+
+
 @pytest.mark.parametrize(
     "kwargs",
-    [{"threshold": 0}, {"threshold": 1.5}, {"pixel_delta": 255}, {"refresh_s": 0}, {"grid": 0}],
+    [
+        {"threshold": 0},
+        {"threshold": 1.5},
+        {"pixel_delta": 255},
+        {"refresh_s": 0},
+        {"grid": 0},
+        {"persist_checks": 0},
+        {"threshold": 0.1, "release_threshold": 0.2},
+        {"release_threshold": 0},
+    ],
 )
 def test_invalid_config_is_rejected(kwargs):
     with pytest.raises(ValueError):
@@ -130,15 +184,22 @@ def test_gated_run_skips_unchanged_ticks_and_logs_every_decision(tmp_path):
     )
     assert gated.exit_code == 0 and gated.manifest["policy"] == "gated"
     assert gated.manifest["gate"]["threshold"] == GateConfig.threshold
+    assert gated.manifest["gate"]["persist_checks"] == GateConfig.persist_checks
     requests = read_jsonl(gated.run_dir / "requests.jsonl")
     drops = read_jsonl(gated.run_dir / "drops.jsonl")
     gate_drops = [d for d in drops if d["origin"] == "gate"]
 
-    # One call for the first frame and one for the placed box; the rest are gate skips.
+    # One call for the first frame and one for the placed box (at 1.0 s), sent once the change
+    # has lasted persist_checks checks and the 2 s minimum interval has passed; the rest are skips.
     assert [r["gate_reason"] for r in requests] == ["gate_initial", "gate_change"]
-    assert 0.9 <= requests[1]["source_time_s"] <= 1.5
+    assert 1.7 <= requests[1]["source_time_s"] <= 2.5
     assert len(requests) < len(read_jsonl(fixed.run_dir / "requests.jsonl"))
-    assert gate_drops and {d["reason"] for d in gate_drops} == {"gate_no_change"}
+    reasons = {d["reason"] for d in gate_drops}
+    assert "gate_persisting" in reasons and reasons <= {
+        "gate_no_change",
+        "gate_persisting",
+        "gate_cooldown",
+    }
     assert all(d["gate_score"] is not None and d["gate_compute_s"] >= 0 for d in gate_drops)
 
     # Every tick is accounted for exactly once: a request or a logged skip.
@@ -148,7 +209,9 @@ def test_gated_run_skips_unchanged_ticks_and_logs_every_decision(tmp_path):
     )
     assert ticks == list(range(len(ticks)))
     counts = gated.manifest["counts"]
-    assert counts["gate_no_change"] == len(gate_drops) and counts["gate_change"] == 1
+    for reason in reasons:
+        assert counts[reason] == sum(d["reason"] == reason for d in gate_drops)
+    assert counts["gate_change"] == 1
     json.dumps(gated.manifest)  # serializable without the GateConfig object
 
 
