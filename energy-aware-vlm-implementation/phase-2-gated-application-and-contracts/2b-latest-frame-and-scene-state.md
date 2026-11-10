@@ -46,10 +46,10 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Replace pending work with the latest eligible frame while inference is busy. | [Tasks](#tasks) | The pending queue never exceeds one frame. | app/main.py:380, tests/test_app_baseline.py:132 | 🟢 |
+| 1 | Replace pending work with the latest eligible frame while inference is busy. | [Tasks](#tasks) | The pending queue never exceeds one frame. | app/main.py:393, tests/test_app_baseline.py:132 | 🟢 |
 | 2 | Update confirmed observations only from successful validated inference and suppress repeated unchanged notices. | [Tasks](#tasks) | Invalid responses leave the previous confirmed state intact. | app/state.py:87, tests/test_scene.py:51 | 🟡 |
 | 3 | Add clean stop behavior and tests for slow requests, cooldown and refresh interactions. | [Tasks](#tasks) | Slow inference does not replay a stale backlog after it finishes. | tests/test_app_baseline.py:132 | 🟡 |
-| 4 | Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies. | [Tasks](#tasks) | Fixed-interval and gated runs emit prediction records through the same derivation, documented in the `2d` prediction contract. | app/main.py:775, tests/test_scene.py:83, docs/data-contracts.md | 🟡 |
+| 4 | Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies. | [Tasks](#tasks) | Fixed-interval and gated runs emit prediction records through the same derivation, documented in the `2d` prediction contract. | app/main.py:788, tests/test_scene.py:83, docs/data-contracts.md | 🟡 |
 | 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
 
 <!-- impl-notes-anchor -->
