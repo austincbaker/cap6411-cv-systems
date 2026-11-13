@@ -1,0 +1,13 @@
+schema_version,video_id,event_id,label,onset_s,end_s,group_id,split,annotator,notes
+1,recording_1_thumbs,E1,thumbs_up,5.0,8.0,S1,,James,
+1,recording_2_thumbs,E1,thumbs_up,4.0,6.0,S1,,James,single
+1,recording_3_peace,E1,peace_sign,4.0,8.0,S1,,James,
+1,recording_4_peace,E1,peace_sign,4.0,7.0,S1,,James,
+1,thumbs_mov_1,E1,thumbs_up,110.0,115.0,S1,,James,
+1,thumbs_mov_1,E2,thumbs_up,375.0,380.0,S1,,James,
+1,thumbs_mov_2,E1,thumbs_up,147.0,153.0,S1,,James,
+1,thumbs_mov_2,E2,thumbs_up,435.0,447.0,S1,,James,
+1,Thumbs_mov_3,E1,thumbs_up,80.0,88.0,S1,,James,
+1,Thumbs_mov_3,E2,thumbs_up,728.0,735.0,S1,,James,
+1,thumbs_mov_4,E1,thumbs_up,377.0,380.0,S1,,James,
+1,thumbs_mov_4,E2,thumbs_up,1145.0,1150.0,S1,,James,
