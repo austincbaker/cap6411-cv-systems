@@ -10,6 +10,10 @@
 **Depends on**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 **Blocks**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4d](../phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md), [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md), [4f](../phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md)
 
+## Selected task and handoff (revision 9)
+
+Run repeated energy trials on the same frozen gesture replay content and shared gesture interpretation for all policies, retaining run IDs for the quality/energy join.
+
 ## Scope
 
 Owner: Shawn. Execute the final repeated energy comparison and generate exportable results. Preserve controls, randomized order and trial provenance, including failed or incomplete runs.

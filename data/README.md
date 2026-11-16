@@ -1,6 +1,8 @@
 # Data
 
-Pilot gesture dataset for the always-on VLM project (items 1e and 2e). Owner: James.
+Selected application: fixed-camera `thumbs_up` and `peace_sign` recognition.
+This supersedes the original workspace object-change scope (master-plan revision 9).
+Pilot dataset for items 1e and 2e. Owner: James.
 
 ## Events
 
@@ -34,6 +36,26 @@ Times are seconds from the start of the video. Check it with:
 ```bash
 uv run contracts-check --kind annotation data/annotations/pilot.csv
 ```
+
+## Dataset status and remaining handoff
+
+The CSV contains 16 events (14 thumbs-up, 2 peace-sign) in 10 videos. All rows
+belong to S1 and all split fields are blank. The control clip is listed above
+and has no positive annotation rows. These are pilot data; no grouped held-out
+split or completion of the planned roughly 30–36 clips/100-event target is claimed.
+
+Item 2e must record the final inventory, session/environment groups, reserved
+splits, second-annotator review, hand-scored cases and description-review rubric.
+Record a public gesture candidate's access, terms and label fit, or a documented
+reason to omit it. Listing candidates in issue #5 or replaying Jester frames does
+not by itself establish that assessment. Existing gate-tuning clips have already
+been inspected; record that history before assigning any final split.
+
+The 0.5-second rule defines ground truth. The advice below to hold staged gestures
+for 5+ seconds helps pilot sampling and does not redefine the event vocabulary.
+Occlusion or an uncertain model answer must not be silently treated as a confirmed
+negative. Exact validated observations and event rearming behavior remain 2c/2b
+implementation work; all policies must use the same rules before scored trials.
 
 ## Running the app on a video
 

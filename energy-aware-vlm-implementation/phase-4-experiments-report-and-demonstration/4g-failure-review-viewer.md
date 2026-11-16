@@ -10,6 +10,10 @@
 **Depends on**: [3e](../phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md)
 **Blocks**: None; optional and excluded from required completion
 
+## Selected task and handoff (revision 9)
+
+If the optional viewer is built, link gesture error rows to source frames and model responses without changing the frozen scoring rules.
+
 ## Scope
 
 Optional owner: James. After required scoring is complete, add a small review interface that connects error rows to source frames and model responses. This is a stretch contribution and does not block the main evaluation or project completion.

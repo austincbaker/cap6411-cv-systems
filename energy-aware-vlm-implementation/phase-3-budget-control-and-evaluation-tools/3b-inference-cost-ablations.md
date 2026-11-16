@@ -10,6 +10,10 @@
 **Depends on**: [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md)
 **Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
+## Selected task and handoff (revision 9)
+
+Measure input/output/cache changes with the selected gesture prompt and representative development clips. Do not trade away one gesture class or report gate-window coverage as quality; preserve the fixed-model policy comparison.
+
 ## Scope
 
 Owner: Austin. Measure the benefit and correctness of output limits, image/crop modes and static-prefix caching. Keep only supported optimizations and preserve negative findings as part of the ablation results.

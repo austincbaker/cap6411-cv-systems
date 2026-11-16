@@ -10,6 +10,10 @@
 **Depends on**: [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md)
 **Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
+## Selected task and handoff (revision 9)
+
+Finish the hand-gesture dataset for both `thumbs_up` and `peace_sign`, with negative/idle clips, grouped session/environment splits, second-annotator review, hand-scored examples and the description-review protocol. PR #41 is a pilot: 16 events/10 annotated videos, one S1 group, blank splits, plus a documented control clip. It does not establish completion of the planned roughly 30–36 clips/100-event target or a reserved held-out set. Record actual counts and any justified target limitation.
+
 ## Scope
 
 Owner: James. Finish the custom dataset and grouped splits, adding a public subset only where event labels can be mapped honestly. Provide manual expected event outcomes that will become reference cases for the scoring implementation. Recording under the `1e` protocol may start before `2d`; only the final annotation files wait on the contract. The full dataset is required by `3h`, not by `3d` (rev. 6).

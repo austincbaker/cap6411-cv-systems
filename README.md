@@ -5,6 +5,29 @@ The software for Austin's first two items is implemented here and smoke-checked 
 experiment platform; owner review and the unplugged energy go/no-go remain. Webcam capture, event gating, scene-state
 logic, energy-budget admission and final evaluation remain separate team tasks.
 
+## Selected task and evaluation readiness
+
+The primary application recognizes **thumbs-up (`thumbs_up`) and peace-sign
+(`peace_sign`) hand gestures** from a fixed camera. Other motion and neither
+gesture are negatives. This supersedes the original object-change default;
+see master-plan revision 9 and [the data protocol](data/README.md).
+
+PR #41 supplies a pilot with 16 events in 10 annotated videos, one session group
+and no assigned splits, plus a documented control clip. Pilot replay and gate
+checks can run now. Complete scored comparisons still require:
+
+- **2c / #9 (Austin and James):** bounded gesture prompts and validated observations.
+- **2b / #8 (Alejandro):** shared gesture event derivation across all policies.
+- **3d / #16 and 3e / #17 (James):** one-to-one matching and scoring CLI.
+- **2e / #11 (James):** full dataset, grouped splits and annotation review before
+  the 3h evaluation freeze and held-out trials.
+
+The current object-list prompt/parser and object/person predictions are legacy
+implementation awaiting those changes. A custom gesture prompt can inspect raw
+answers but does not make `predictions.jsonl` a valid gesture prediction stream.
+Gate-window coverage measures whether a frame was sampled; it does not establish
+precision, recall, F1 or response-available delay.
+
 ## Setup
 
 Use Ubuntu 22.04.5 LTS, Python 3.10 or newer, Git, CMake, a C/C++ toolchain and
@@ -267,10 +290,8 @@ and made more calls than fixed 2 s sampling. Threshold 0.3 with 3 checks
 caught every gesture with 82% fewer calls than fixed sampling on
 `real_thumbs_1`; 0.4 cut calls further but leaves less margin under the
 gestures' scores. Hysteresis only added calls on these clips, so it is off.
-These clips have no object events: a small object such as a mug can cover
-less than a third of a grid cell and score below 0.3, so check clips with
-objects (or try `--gate-grid 8`) before relying on the defaults for
-`object_placed` and `object_removed`.
+These settings were developed for gesture clips. Object events are outside the
+primary study; these checks do not establish object-event performance.
 
 | Clip (role) | Fixed 2 s calls | Gated calls | Gestures caught (fixed, gated) |
 |---|---|---|---|
@@ -313,9 +334,11 @@ rebuilds a given replay. The held stretch is a frozen frame and the cut into
 each clip is a scene change the gate should catch, so treat it as a functional
 check. Keep the frames, recordings and outputs local.
 
-### Scene state and predicted events (item 2b)
+### Legacy scene state and pending gesture events (item 2b)
 
-Every policy runs the same derivation in `app/state.py`. A successful
+Every policy currently runs the same legacy derivation in `app/state.py`.
+Items 2c and 2b must replace its interpretation with validated gesture
+observations and gesture events before primary quality evaluation. A successful
 response is parsed into an observation (person visible, set of objects), the
 observation is compared with the confirmed scene, and each difference becomes
 one line in `predictions.jsonl`: `person_enters`, `person_leaves`,
@@ -327,8 +350,8 @@ leaves the confirmed scene as it was.
 The parser is a stand-in until item 2c fixes the prompt and observation
 format. It reads the default prompt's answer ("Name the objects you see,
 separated by commas."), keeps each item's head noun (`red mug` and `mug` are the
-same object) and treats person words as presence. A custom `--prompt` whose
-answer is not a list produces no predictions.
+same object) and treats person words as presence. A custom gesture `--prompt` is incompatible with this parser; any resulting
+object/person predictions must not be interpreted as gesture detections.
 
 Pending work stays bounded: at most one request is in flight, the capture
 thread keeps only the newest frame, and a busy tick is skipped rather than

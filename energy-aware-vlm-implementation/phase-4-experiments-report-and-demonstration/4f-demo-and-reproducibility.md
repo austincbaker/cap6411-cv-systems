@@ -10,9 +10,13 @@
 **Depends on**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md), [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md)
 **Blocks**: Final phase acceptance / project handoff
 
+## Selected task and handoff (revision 9)
+
+Demonstrate `thumbs_up` and `peace_sign`, repeated holds, a new gesture after a hand drop, negatives and explicit failures. Reproduce a scored gesture trial with the documented setup; the legacy object-event demo does not satisfy the selected task.
+
 ## Scope
 
-Owners: All four members. Demonstrate live workspace events and reproduce at least one experiment and one report artifact using written instructions. Make setup and each member's deliverables clear to a reviewer.
+Owners: All four members. Demonstrate live thumbs-up and peace-sign events and reproduce at least one experiment and one report artifact using written instructions. Make setup and each member's deliverables clear to a reviewer.
 
 ## Tasks
 

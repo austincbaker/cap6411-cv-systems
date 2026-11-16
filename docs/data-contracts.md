@@ -199,16 +199,17 @@ under WSL2.
 | `schema_version` | str | |
 | `video_id` | str | stem of the replayed file name (`pilot-desk-01` for `.../pilot-desk-01.mp4`) |
 | `event_id` | str | unique within the video |
-| `label` | str | from the event vocabulary, **provisional** until 1e: `person_enters`, `person_leaves`, `object_placed`, `object_removed`, `thumbs_up`, `peace_sign` |
+| `label` | str | primary task: `thumbs_up`, `peace_sign`; legacy compatibility: `person_enters`, `person_leaves`, `object_placed`, `object_removed` |
 | `onset_s` | float | source time when the event first becomes visible |
 | `end_s` | float, *null* | empty for an instantaneous event |
 | `group_id` | str | session or environment, for grouped splits (2e) |
 | `split` | str, *null* | `dev`, `validation` or `test` |
 | `annotator`, `notes` | str, *null* | |
 
-The pilot gesture labels extend the provisional vocabulary; the four scene-change
-labels remain valid. For `thumbs_up`, onset is when the thumb is fully up with the
-other fingers curled. For `peace_sign`, onset is when the index and middle
+The selected primary vocabulary is `thumbs_up` and `peace_sign` (master-plan
+revision 9). The validator retains the four scene-change labels solely for legacy
+app logs; they are outside the primary gesture evaluation. For `thumbs_up`, onset
+is when the thumb is fully up with the other fingers curled. For `peace_sign`, onset is when the index and middle
 fingers are fully up in a V with the others curled. Both intervals end when the
 hand starts to drop or the shape breaks. A gesture must be held for at least
 0.5 seconds to count; repeating it after the hand drops is a new event. Waving,
@@ -218,8 +219,11 @@ visible-state intervals. See `data/README.md` for the pilot inventory.
 ### `predictions.jsonl` (kind `prediction`)
 
 Predicted events from the shared 2b derivation: validated observations (2c)
-differenced against the confirmed scene state. Model text alone is never a
-prediction.
+compared against the confirmed gesture state. Model text alone is never a
+prediction. Gesture observation validation and event derivation remain pending in
+2c/2b; the current object-list parser emits legacy events. All policies must share
+gesture confirmation, suppression and rearming semantics before scored trials.
+Unknown/invalid observations must not silently become a confirmed negative.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -229,8 +233,8 @@ prediction.
 | `source_time_s` | float, *null* | frame evidence |
 | `host_capture_s`, `response_available_s` | float | host time |
 | `available_source_time_s` | float, *null* | see "Time bases"; *null* exactly when `source_time_s` is |
-| `object`? | str, *null* | the object for `object_placed` / `object_removed`; *null* for person events |
-| `observation`? | any | the observation behind it; until 2c this is `{person, objects}` from the stand-in parser |
+| `object`? | str, *null* | legacy object-event metadata; omit or use *null* for primary gesture events |
+| `observation`? | any | the observation behind it; gesture representation to be specified by 2c; legacy app uses `{person, objects}` |
 
 ### `metrics.json` (kind `metrics`)
 
@@ -326,7 +330,10 @@ issues = validate_run_dir(run_dir)  # also checks run_id across files and predic
 
 `tests/fixtures/contracts/` holds one synthetic replay run with numbers chosen
 to be checked by hand. `tests/test_contracts.py` validates every file and
-recomputes the expected values.
+recomputes the expected values. The gesture prediction examples are synthetic
+contract targets, not evidence that the current app emits gesture events. Their
+`{gesture: label}` observation metadata is illustrative; 2c must specify the final
+validated representation with 2b.
 
 - `run_valid/`: a 60 s replay of `pilot-desk-01` at 2 s intervals.
   - 30 ticks: 22 requests (21 `ok`, 1 `timeout` with unknown server state),
@@ -336,17 +343,17 @@ recomputes the expected values.
   - Battery reports every 10 s, one of which failed.
 - `annotations_gestures.csv`: two synthetic gesture intervals, one per added label,
   including a gesture held for exactly 0.5 seconds.
-- `annotations.csv`: three events in `pilot-desk-01`, plus one in another
+- `annotations.csv`: three gesture events in `pilot-desk-01`, plus one in another
   video that must be ignored.
 - `expected_metrics.json`: the hand-scored result.
 
   | Prediction | Label | Evidence (s) | Available (s) | Outcome |
   |---|---|---|---|---|
-  | P1 | person_enters | 10.0 | 11.8 | TP for E1 (onset 10.0), delay 1.8 |
-  | P2 | person_enters | 12.0 | 13.7 | duplicate of E1 |
-  | P3 | object_placed | 24.0 | 35.5 | late for E2 (35.5 > 25.0 + 10) |
-  | P4 | object_removed | 38.0 | 39.7 | unmatched |
-  | P5 | person_leaves | 50.0 | 51.6 | TP for E3 (onset 50.0), delay 1.6 |
+  | P1 | thumbs_up | 10.0 | 11.8 | TP for E1 (onset 10.0), delay 1.8 |
+  | P2 | thumbs_up | 12.0 | 13.7 | duplicate of E1 |
+  | P3 | peace_sign | 24.0 | 35.5 | late for E2 (35.5 > 25.0 + 10) |
+  | P4 | peace_sign | 38.0 | 39.7 | unmatched |
+  | P5 | thumbs_up | 50.0 | 51.6 | TP for E3 (onset 50.0), delay 1.6 |
 
   This gives TP 2, FP 3, FN 1 (E2), precision 2/5 = 0.4, recall 2/3,
   F1 0.5 and mean delay 1.7 s.
@@ -366,10 +373,11 @@ recomputes the expected values.
 
 ## Open items
 
-- **1e (James):** the event vocabulary and the onset/end rules. The labels
-  above are placeholders.
-- **2c (Austin):** the structured observation format behind `observation`.
-- **2b (Alejandro):** the event derivation that writes `predictions.jsonl`.
+- **1e / 2e (James):** selected gesture rules are in `data/README.md`; complete
+  reviewed grouped data and record public-candidate feasibility.
+- **2c (Austin and James):** validated gesture prompts and the structured
+  observation format behind `observation`.
+- **2b (Alejandro):** shared gesture event derivation that writes `predictions.jsonl`.
 - **2a (Alejandro):** gate decision reasons in `drops.jsonl` (`origin: gate`).
 - **3h:** freeze `evidence_tolerance_s`, `horizon_s` and label
   normalization.

@@ -10,6 +10,10 @@
 **Depends on**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md)
 **Blocks**: [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md)
 
+## Selected task and handoff (revision 9)
+
+Present energy versus gesture quality and delay from the same runs. Separate gate misses, gesture interpretation errors, duplicate notifications and delayed responses; retain negative or inconclusive results.
+
 ## Scope
 
 Owners: Austin and Shawn. Interpret the energy controller's observed behavior and the system's measured energy costs. Report adherence, exceptions, domain limits and the fixed idle floor rather than implying all energy is controllable. Publish the combined energy-quality tables and figures by joining `4a` scores to `4b` trials (rev. 6).

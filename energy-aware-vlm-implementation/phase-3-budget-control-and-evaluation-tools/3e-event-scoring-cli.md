@@ -10,6 +10,10 @@
 **Depends on**: [3d](../phase-3-budget-control-and-evaluation-tools/3d-event-matching.md)
 **Blocks**: [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md), [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md), [4g](../phase-4-experiments-report-and-demonstration/4g-failure-review-viewer.md)
 
+## Selected task and handoff (revision 9)
+
+Score gesture predictions against annotations and export precision, recall, F1, response-available delay and traceable error rows. Count duplicates and false gesture detections on negative clips. Request-window coverage from gate_check.py is not a substitute for this evaluator.
+
 ## Scope
 
 Owner: James. Build the command-line evaluator that produces the final quality results. Export aggregate scores and an event-level error report that others can review without reading the inference implementation.

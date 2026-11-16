@@ -10,13 +10,17 @@
 **Depends on**: [1a](../phase-1-live-inference-and-measurement/1a-local-vlm-inference.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md)
 **Blocks**: [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md)
 
+## Selected task and handoff (revision 9)
+
+Austin and James own bounded prompts and validated per-frame observations for `thumbs_up`, `peace_sign` and neither. Specify the exact representation with Alejandro before integration; distinguish unknown/malformed output from a valid negative. Test both labels, negatives, invalid output and timing provenance. The existing object-list prompt is a legacy stand-in, not the target interface.
+
 ## Scope
 
-Owner: Austin. Constrain prompts and validate model responses against the selected event/observation vocabulary. Record request status, time and available token statistics without confusing model text with confirmed temporal events.
+Owners: Austin and James. Constrain prompts and validate model responses against the selected event/observation vocabulary. Record request status, time and available token statistics without confusing model text with confirmed temporal events.
 
 ## Tasks
 
-- [ ] Define bounded prompts and a structured per-frame observation (for example, a visible-object list) aligned with James's event definitions.
+- [ ] Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions.
 - [ ] Validate parsed output, preserve original request status and distinguish observations from inferred state changes.
 - [ ] Emit source-frame and response-available timestamps plus supported token/cache statistics.
 
@@ -45,7 +49,7 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Define bounded prompts and a structured per-frame observation (for example, a visible-object list) aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | — | ⬜ |
+| 1 | Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | — | ⬜ |
 | 2 | Validate parsed output, preserve original request status and distinguish observations from inferred state changes. | [Tasks](#tasks) | Malformed text does not silently become a correct event. | — | ⬜ |
 | 3 | Emit source-frame and response-available timestamps plus supported token/cache statistics. | [Tasks](#tasks) | Unavailable counts remain missing and successful responses carry both timestamps. | — | ⬜ |
 | 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
