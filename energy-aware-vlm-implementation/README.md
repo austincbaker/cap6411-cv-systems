@@ -53,8 +53,8 @@ Austin owns local inference and energy admission. Alejandro owns capture, cascad
 | [1f](./phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md) | Shawn | Measurement protocol and research review | None | P1 | [#6](https://github.com/austincbaker/cap6411-cv-systems/issues/6) | Expanded |
 | [2a](./phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md) | Alejandro | Change gate and relevance rules | `1c`, `1d`, `1e` | P1 | [#7](https://github.com/austincbaker/cap6411-cv-systems/issues/7) | Lean |
 | [2b](./phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md) | Alejandro | Latest-frame scheduling and scene state | `1d`, `2a`, `2c` | P1 | [#8](https://github.com/austincbaker/cap6411-cv-systems/issues/8) | Lean |
-| [2c](./phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | Austin | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) | Lean |
-| [2d](./phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | Austin (lead) and Alejandro | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) | Lean |
+| [2c](./phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | Austin and James | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) | Lean |
+| [2d](./phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | Austin and James | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) | Lean |
 | [2e](./phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md) | James | Annotated dataset, grouped splits and scoring examples | `1e`, `2d` | P1 | [#11](https://github.com/austincbaker/cap6411-cv-systems/issues/11) | Lean |
 | [2f](./phase-2-gated-application-and-contracts/2f-benchmark-configurations.md) | Shawn | Benchmark protocol and configuration templates | `1f`, `2d` | P1 | [#12](https://github.com/austincbaker/cap6411-cv-systems/issues/12) | Lean |
 | [3a](./phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md) | Austin | Calibrated energy-budget admission | `1b`, `2d`, `2f` | P1 | [#13](https://github.com/austincbaker/cap6411-cv-systems/issues/13) | Lean |
@@ -105,3 +105,10 @@ P0 covers critical foundations/handoffs, P1 required delivery, P2 the inference 
 - Evidence and limitations: [validation notes](../docs/validation-1a-1b.md).
 
 The code is in `src/vlm/`, `src/energy/` and `scripts/llama_runtime.py`. Dependencies are locked through `uv.lock`. Items `1a`/`1b` have dated owner acceptance for issue closure; see [closeout evidence](../docs/validation-1a-1b.md#owner-closeout--2026-11-05).
+
+## Selected task (revision 9)
+
+The primary application is `thumbs_up` and `peace_sign` recognition; other
+motion is negative data. See `data/README.md` and the master-plan revision log.
+PR #41 provides pilot annotations, not completed held-out splits. Items 2c/2b
+still need gesture interpretation, and 3d/3e still need matching and scoring.

@@ -10,6 +10,10 @@
 **Depends on**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md)
 **Blocks**: [4d](../phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md), [4e](../phase-4-experiments-report-and-demonstration/4e-research-report.md), [4f](../phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md)
 
+## Selected task and handoff (revision 9)
+
+Evaluate held-out `thumbs_up` and `peace_sign` events and negative clips with the frozen scorer. Review both missed gestures and false detections; keep source evidence and response availability distinct and do not tune on held-out outputs.
+
 ## Scope
 
 Owner: James. Apply the frozen evaluator to the held-out prediction logs produced by `4b`'s trials, so quality and energy come from the same runs (rev. 6), and inspect the quality of generated descriptions. Separate gate misses, VLM mistakes and delayed/duplicate notifications in the findings.

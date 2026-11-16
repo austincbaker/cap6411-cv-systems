@@ -10,6 +10,10 @@
 **Depends on**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2a](../phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md), [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md)
 **Blocks**: [3c](../phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md)
 
+## Selected task and handoff (revision 9)
+
+Replace the legacy object/person event derivation with shared gesture event derivation for every policy. Consume #9 validated observations for `thumbs_up`, `peace_sign` and neither; specify and test confirmation, sustained-gesture suppression, rearming after a hand drop, class changes and unknown/occluded observations. Preserve failures and frame/response timestamps. The current object-list parser does not meet this gesture requirement.
+
 ## Scope
 
 Owner: Alejandro. Bound inference work to one active request and one pending latest frame. Maintain confirmed scene state and suppress redundant notifications while preserving failures and stale-observation status. Own the shared event derivation (rev. 6): normalize validated per-frame observations, difference them against confirmed state and emit predicted events; every policy, including fixed-interval, uses this same derivation.

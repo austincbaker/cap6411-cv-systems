@@ -234,3 +234,14 @@ def test_pilot_gesture_vocabulary_is_accepted():
     rows = load("annotation", FIXTURES / "annotations_gestures.csv")
     assert {row["label"] for row in rows} == {"thumbs_up", "peace_sign"}
     assert all(row["end_s"] - row["onset_s"] >= 0.5 for row in rows)
+
+
+def test_hand_scored_quality_fixture_uses_selected_gestures():
+    labels = {"thumbs_up", "peace_sign"}
+    annotations = load("annotation", FIXTURES / "annotations.csv")
+    predictions = load("prediction", RUN / "predictions.jsonl")
+    assert {row["label"] for row in annotations} == labels
+    assert {row["label"] for row in predictions} == labels
+    assert all(row["end_s"] - row["onset_s"] >= 0.5 for row in annotations)
+    requests = {row["request_id"]: row for row in load("request", RUN / "requests.jsonl")}
+    assert all(requests[row["request_id"]]["text"] == row["label"] for row in predictions)

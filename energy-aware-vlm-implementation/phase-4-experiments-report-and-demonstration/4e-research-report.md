@@ -10,6 +10,10 @@
 **Depends on**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md), [4d](../phase-4-experiments-report-and-demonstration/4d-budget-and-energy-findings.md)
 **Blocks**: [4f](../phase-4-experiments-report-and-demonstration/4f-demo-and-reproducibility.md)
 
+## Selected task and handoff (revision 9)
+
+Describe the selected hand-gesture task, annotation rules, actual clip/event/split counts, public-data limitations, gesture prompt/parser, shared event derivation and scorer. Keep legacy object support and functional gate checks distinct from primary gesture results.
+
 ## Scope
 
 James and Shawn coordinate the final report; Austin and Alejandro provide and review the architecture and implementation sections. Connect the research question, controlled evaluation and failure analysis without claiming novel event gating or guaranteed savings.

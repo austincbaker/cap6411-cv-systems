@@ -10,6 +10,10 @@
 **Depends on**: [2e](../phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md), [3c](../phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md), [3e](../phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md), [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md)
 **Blocks**: [4a](../phase-4-experiments-report-and-demonstration/4a-held-out-event-evaluation.md), [4b](../phase-4-experiments-report-and-demonstration/4b-repeated-energy-experiments.md), [4c](../phase-4-experiments-report-and-demonstration/4c-stability-and-defect-resolution.md)
 
+## Selected task and handoff (revision 9)
+
+Freeze gesture labels/rules, grouped splits, matching tolerance, availability horizon and description-review rubric after an end-to-end gesture pilot. Require #11 data, #9/#8 gesture integration and #16/#17 scoring evidence. Current pilot annotations and gate checks alone do not satisfy the freeze.
+
 ## Scope
 
 Owners: All four members. Run a development/validation pilot through the complete application and both evaluation toolchains. Resolve calculation or contract defects and freeze settings before exposing held-out results. This is the only evaluation freeze (rev. 6): it fixes matching tolerance, reporting horizon and label normalization, the matched-invocation rate, budget levels, and the description-review protocol, and it requires the `3c` stability smoke run and the complete `2e` dataset.

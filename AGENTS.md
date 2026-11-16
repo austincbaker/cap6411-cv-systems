@@ -22,7 +22,7 @@
 ## Project overview
 
 - **Purpose:** CAP6411 four-week team research project: an always-on local
-  webcam assistant that uses a cheap change gate and an energy-budget
+  webcam assistant for `thumbs_up` and `peace_sign` hand gestures that uses a cheap change gate and an energy-budget
   controller to decide when a compact vision-language model (VLM) analyzes a
   frame, compared against fixed-interval sampling on measured energy, event
   quality and response delay.
@@ -112,6 +112,16 @@ rather than duplicating it once those steps exist.
   `src/evaluation/`, `experiments/score_events.py`), and Shawn owns methods,
   benchmarks and analysis (`docs/methodology.md`, `experiments/run_benchmarks.py`,
   `experiments/analyze_results.py`). Coordinate edits to shared documents.
+
+## Selected application
+
+- Hand gestures (`thumbs_up` and `peace_sign`) are the primary task (master-plan
+  revision 9); other motion and neither gesture are negatives. Use the onset/end
+  rules in `data/README.md`. Object/person event support is legacy behavior.
+- Items `2c` (Austin and James) and `2b` (Alejandro) still need gesture observation
+  validation and shared event derivation. Do not treat object-list predictions or
+  request-window coverage as scored gesture detections. Items `3d`/`3e` own
+  matching and scoring; `2e` owns complete grouped splits.
 
 ## Data and measurement integrity
 

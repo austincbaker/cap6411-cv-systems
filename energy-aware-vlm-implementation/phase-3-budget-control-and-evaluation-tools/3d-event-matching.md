@@ -10,6 +10,10 @@
 **Depends on**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md)
 **Blocks**: [3e](../phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md)
 
+## Selected task and handoff (revision 9)
+
+Match `thumbs_up` and `peace_sign` predictions to gesture intervals using the shared contract and one-to-one matching. Test repeated gestures, sustained holds, wrong labels, duplicates, late availability, tolerance boundaries and negatives. Build from synthetic contract fixtures without waiting for the full #11 dataset.
+
 ## Scope
 
 Owner: James, with Alejandro reviewing reference cases. Implement deterministic one-to-one matching between predictions and labeled events. Apply the contract's label and timing rules so delays, duplicates and wrong events are counted consistently. Build against the `2d` hand-scored fixtures; the full `2e` dataset is checked in `3h` (rev. 6).

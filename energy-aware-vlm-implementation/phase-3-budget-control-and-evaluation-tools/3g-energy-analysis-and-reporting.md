@@ -10,6 +10,10 @@
 **Depends on**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md), [3e](../phase-3-budget-control-and-evaluation-tools/3e-event-scoring-cli.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md)
 **Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
+## Selected task and handoff (revision 9)
+
+Join gesture quality metrics and whole-laptop battery results by run ID. Report response-availability delay, invocation count and failures separately from gate-window coverage; do not present legacy object-event predictions as gesture detections.
+
 ## Scope
 
 Owner: Shawn, with Austin checking energy calculations and James supplying quality metrics. Convert saved trials into comparable energy, latency and quality tables and figures. Keep measured energy domains and unavailable data explicit.

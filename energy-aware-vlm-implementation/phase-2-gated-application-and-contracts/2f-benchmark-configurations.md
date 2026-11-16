@@ -10,6 +10,10 @@
 **Depends on**: [1f](../phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md)
 **Blocks**: [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md), [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md)
 
+## Selected task and handoff (revision 9)
+
+Benchmark fixed, matched-invocation, gated and budget policies on identical hand-gesture videos with the same model, gesture prompt/parser, event derivation and scorer. Freeze splits and timing parameters in #20; do not tune on held-out gestures.
+
 ## Scope
 
 Owner: Shawn. Turn pilot observations into a version-1 benchmark matrix, controls and configuration templates; item `3h` performs the only evaluation freeze (rev. 6). Define rules, not values, for settings that need the integrated application, such as deriving the matched-invocation rate from the cascade's mean rate on development data. Keep a small set of main long-run comparisons while retaining shorter ablations and a matched-invocation baseline.

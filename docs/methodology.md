@@ -4,6 +4,25 @@ This document currently covers Austin's item 1b collector and its hardware check
 Shawn owns the later experiment protocol, controls, repeat strategy and analysis in items
 1f, 2f, 3f and 3g; their completion is not implied by this sensor documentation.
 
+## Application and quality measurement
+
+The selected task is fixed-camera `thumbs_up` and `peace_sign` recognition
+(master-plan revision 9). Ground truth follows `data/README.md`: a visible shape
+held at least 0.5 seconds, ending when the hand drops or the shape breaks;
+repeating after a hand drop is a new event. Other motion is negative data.
+
+Compare policies on the same videos, model and gesture interpretation. Quality
+uses one-to-one matches of gesture predictions and annotations under
+`docs/data-contracts.md`, including false detections, duplicates and missed events.
+Response delay uses response availability on the source timeline, not merely the
+sampled frame time. Request-window coverage is a gate-development diagnostic.
+
+PR #41 is a single-group pilot with unassigned splits. Item 2e must establish
+reviewed grouped splits; 3h freezes them and the scoring parameters before
+held-out evaluation. Gesture prompt/validation (2c), shared derivation (2b),
+matching (3d) and scoring (3e) remain implementation prerequisites. Legacy
+object-event output cannot support the primary gesture-quality claims.
+
 ## Research questions
 
 ### Primary research question

@@ -6,7 +6,7 @@
 
 ## Summary
 
-As a **laptop user**, I want **a local webcam assistant that recognizes meaningful scene changes within an energy budget**, so that **I can receive useful updates while limiting battery consumption**.
+As a **laptop user**, I want **a local webcam assistant that recognizes thumbs-up and peace-sign gestures within an energy budget**, so that **I can receive useful updates while limiting battery consumption**.
 
 Build a persistent llama.cpp application on CPU or integrated graphics, using a cheap change-detection gate to decide when the VLM should analyze a frame. Compare event-driven and budget-aware inference against fixed-interval sampling using measured energy, event quality, and response delay.
 
@@ -22,11 +22,11 @@ Austin and Alejandro own the core runtime. James and Shawn own research and eval
 
 The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [FastVLM](https://arxiv.org/abs/2412.13303), and [MobileVLM](https://arxiv.org/abs/2312.16886). These are supplied research references. This plan does not independently verify the performance claims or dataset details in earlier discussion.
 
-**Assumption:** Workspace awareness with object addition/removal is the default application because the events can be staged and annotated using a fixed webcam. Simulated lab-safety monitoring and assistive object tracking remain candidate task definitions; implementing all three applications is outside the four-week scope.
+**Selected task (rev. 9):** The selected application is fixed-camera hand-gesture recognition: `thumbs_up` and `peace_sign`, with other motion treated as negative examples. This supersedes the original workspace object-change default (D01, rev. 9).
 
 **Platform confirmed by Austin (rev. 1, refined rev. 6):** Ubuntu 22.04.5 LTS running under WSL2 on the team laptop is the primary experiment platform. Keep the settled CPU-first baseline; integrated graphics, if tested, remain a separate configuration. WSL2 exposes no powercap/RAPL counters, so package energy is unavailable; whole-laptop battery energy, measured unplugged through native Windows BatteryReport, is the qualified domain after the `1b` go/no-go (rev. 7).
 
-**Implementation-time checks retained for Week 1:** Finalize the event vocabulary using the default workspace task, verify a supported and sufficiently responsive model, check the actual laptop/sensors, and confirm public clip access and fit. These are assigned discovery tasks, not assumptions that their outcomes are already known.
+**Implementation-time checks retained for Week 1:** Apply the selected gesture vocabulary and verify its annotation rules, verify a supported and sufficiently responsive model, check the actual laptop/sensors, and confirm public clip access and fit. These are assigned discovery tasks, not assumptions that their outcomes are already known.
 
 **Planning-quality risk (rev. 5, updated rev. 6):** `AGENTS.md` records repository ownership, contracts and platform acceptance requirements. `pyproject.toml`, `uv.lock`, README commands and focused tests now exist. The `1b` unplugged source check passed; final trials still require controlled long-run battery measurements (rev. 7).
 
@@ -44,7 +44,7 @@ The research starting points are [SmolVLM](https://arxiv.org/abs/2504.05299), [F
 - Training a new VLM or designing a new visual encoder.
 - Dedicated-GPU or cloud inference for the application.
 - Supporting every operating system or power-measurement backend in the first release.
-- Building all three candidate applications or persistent identity tracking across complex occlusions.
+- Object addition/removal, lab-safety monitoring, assistive object tracking or persistent identity tracking.
 - Requiring a learned gate, a failure-review viewer, or advanced cache management to complete the core study.
 - Publishing a live GitHub issue as part of creating this draft.
 
@@ -69,13 +69,13 @@ Energy savings and quality preservation are research outcomes to measure, not gu
 
 ## Design
 
-### Decision register (rev. 1)
+### Decision register (updated rev. 9)
 
 The original Design choices remain settled. Stable identifiers below let item plans refer to those choices without reopening them. The five-column table records baseline versus revised choices.
 
-| # | Decision | Baseline choice | Rev. 1 choice | Δ |
+| # | Decision | Baseline choice | Current choice | Δ |
 | --- | --- | --- | --- | --- |
-| D01 | Application boundary | One application; workspace object changes by default | Same; finalize narrow event vocabulary in `1e` | — |
+| D01 | Application boundary | One application; workspace object changes by default | Selected hand gestures; onset/end rules in `data/README.md` (rev. 9) | task selected |
 | D02 | Ownership | Austin/Alejandro core runtime; James/Shawn evaluation software | Same; each item names its owner | — |
 | D03 | Inference | One compact model/quantization; CPU-first | Same; compatibility measured in `1a`; integrated GPU reported separately | — |
 | D04 | Cascade | Cheap rule gate, refresh, cooldown and acknowledged reference | Same; learned classifier stays optional | — |
@@ -122,7 +122,7 @@ Pencils down is **2026-12-01**. Week 1 is assumed to have started on Monday 2026
 
 ### Scope and ownership
 
-**Decision:** Deliver one application and one primary hardware configuration. Default to workspace object changes, confirming the final task in Week 1. Keep the development path concentrated with Austin and Alejandro while giving James and Shawn ownership of the tools that produce the final evaluation.
+**Decision:** Deliver one application and one primary hardware configuration. Use fixed-camera hand gestures (`thumbs_up` and `peace_sign`); the task choice is settled (rev. 9). Keep the development path concentrated with Austin and Alejandro while giving James and Shawn ownership of the tools that produce the final evaluation.
 
 | Member | Early work: Weeks 1–2 | Coding ownership: Weeks 3–4 | Required deliverable |
 | --- | --- | --- | --- |
@@ -147,7 +147,7 @@ All members contribute recordings and review the report. James and Shawn begin w
 
 **Decision:** Use one supported compact VLM and quantization for primary comparisons. Try a small SmolVLM-family model first, verifying compatibility, latency, and memory in Week 1. Use CPU as the simplest common baseline; document integrated-GPU runs separately if included.
 
-Keep one inference active and at most one pending latest frame. Compare against the last acknowledged scene as well as recent motion so gradual changes can be detected. Use cooldowns and forced refreshes to balance repeated triggers and stale scene state. Treat disappearance as “no longer visible” unless removal is supported by the task evidence.
+Keep one inference active and at most one pending latest frame. Compare against the last acknowledged scene as well as recent motion so gradual changes can be detected. Use cooldowns and forced refreshes to balance repeated triggers and stale scene state. Treat occlusion or malformed output as unknown, not as a confirmed return to neither gesture.
 
 Measure resolution/crop effects, output-token limits, and valid static-prefix caching. Changed images must be processed as changed input. Only claim image-token savings when the selected model actually processes fewer visual tokens. A cache result showing little benefit remains a valid ablation.
 
@@ -157,8 +157,8 @@ Measure resolution/crop effects, output-token limits, and valid static-prefix ca
 
 | Artifact | Required information | Producer → consumer |
 | --- | --- | --- |
-| Annotation records | Video/session ID, event ID, class, object if relevant, observable event interval, priority | James → evaluator |
-| Prediction records | Run/video ID, prediction ID, source-frame time, response-available time, event label, object, description, request status; events come from the shared `2b` derivation | Austin/Alejandro → James |
+| Annotation records | Video/session ID, event ID, gesture class, observable event interval, priority | James → evaluator |
+| Prediction records | Run/video ID, prediction ID, source-frame time, response-available time, gesture label, description, request status; events come from the shared `2b` derivation | Austin/Alejandro → James |
 | Request/gate records | Trigger or skip reason, frame time, inference mode, latency, output length, available token/cache statistics | Austin/Alejandro → Shawn |
 | Power samples | Run ID, monotonic elapsed time, power in W or cumulative energy in J, sensor and domain, sample validity | Austin → Shawn |
 | Run manifest | Schema version, configuration, video/session, repeat, model/build revisions, hardware/backend, power mode, measured interval, AC/battery state and completion status | Core runtime initially; Shawn's runner later → all tools |
@@ -167,13 +167,13 @@ Measure resolution/crop effects, output-token limits, and valid static-prefix ca
 
 Use video-relative time for event matching and a shared monotonic timeline for energy/inference alignment. Keep source-frame time and response-available time distinct so a delayed response is not credited as an immediate detection. Store unavailable sensor or token values explicitly as missing.
 
-James and Alejandro define the event-label normalization, matching tolerance and eligibility window before the held-out evaluation. Require one-to-one matches; extra predictions for an already matched event count as false positives and are flagged as duplicates. Define empty-set metric behavior in the contract. Support a reporting horizon for sustained state changes when the transition itself has ended, with that horizon frozen before testing.
+James and Alejandro define the event-label normalization, matching tolerance and eligibility window before the held-out evaluation. Require one-to-one matches; extra predictions for an already matched event count as false positives and are flagged as duplicates. Define empty-set metric behavior in the contract. Support a response-availability reporting horizon for gesture detections, with that horizon frozen before testing.
 
 ### Data and experimental method
 
-James coordinates approximately 30–36 short clips, at least 100 labeled events where feasible, and longer quiet/mixed-activity recordings. Include small changes, irrelevant motion, lighting variation, occlusion and no-event scenes. Split by session or environment; retain an unseen environment if practical. Two members independently check a subset of annotations.
+James coordinates approximately 30–36 short clips, at least 100 labeled events where feasible, and longer quiet/mixed-activity recordings. Include both gesture classes, small/distant hands, irrelevant motion, lighting variation, occlusion and no-event scenes. Split by session or environment; retain an unseen environment if practical. Two members independently check a subset of annotations.
 
-Use one accessible public subset if its camera view and labels can be mapped honestly to the selected task. Candidate sources from the discussion include Charades or Watch-n-Patch for workspace activity, R2PPE for PPE monitoring, and TREK-150 or Ego4D Hands & Objects for manipulation. James verifies access, terms and task fit before adoption; these are candidates, not confirmed dependencies. Keep participant recordings and permitted public data local unless sharing permission is established.
+Use one accessible public subset if its camera view and labels can be mapped honestly to the selected task. Candidate gesture sources recorded in issue #5 include Jester, IPN Hand and iMiGUE. Existing Jester replay tooling is a functional check, not evidence that access, terms or label mapping have been accepted. James verifies access, terms and task fit before adoption; these are candidates, not confirmed dependencies. Keep participant recordings and permitted public data local unless sharing permission is established.
 
 Shawn defines these comparisons: camera/model idle; fixed sampling at several feasible intervals; random or fixed sampling at the cascade's average invocation rate; change gate; relevance gate; and the complete budget-aware policy. Specify missed deadlines and dropped frames explicitly when fixed sampling overloads the hardware. Use the same replay content at real-time speed and repeat the main energy trials three times in randomized order.
 
@@ -264,8 +264,8 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 | [1f](./phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md) | 1 | Shawn | Measurement protocol and research review | None; independent discovery/build item | P1 | [#6](https://github.com/austincbaker/cap6411-cv-systems/issues/6) |
 | [2a](./phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md) | 2 | Alejandro | Change gate and relevance rules | `1c`, `1d`, `1e` | P1 | [#7](https://github.com/austincbaker/cap6411-cv-systems/issues/7) |
 | [2b](./phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md) | 2 | Alejandro | Latest-frame scheduling and scene state | `1d`, `2a`, `2c` | P1 | [#8](https://github.com/austincbaker/cap6411-cv-systems/issues/8) |
-| [2c](./phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | 2 | Austin | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) |
-| [2d](./phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin (lead) and Alejandro | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
+| [2c](./phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md) | 2 | Austin and James | Validated prompts, responses and inference logs | `1a`, `1e` | P1 | [#9](https://github.com/austincbaker/cap6411-cv-systems/issues/9) |
+| [2d](./phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md) | 2 | Austin and James | Versioned evaluation contracts and sample artifacts | `1b`, `1d`, `1e`, `1f`, `2c` | P0 | [#10](https://github.com/austincbaker/cap6411-cv-systems/issues/10) |
 | [2e](./phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md) | 2 | James | Annotated dataset, grouped splits and scoring examples | `1e`, `2d` | P1 | [#11](https://github.com/austincbaker/cap6411-cv-systems/issues/11) |
 | [2f](./phase-2-gated-application-and-contracts/2f-benchmark-configurations.md) | 2 | Shawn | Benchmark protocol and configuration templates | `1f`, `2d` | P1 | [#12](https://github.com/austincbaker/cap6411-cv-systems/issues/12) |
 | [3a](./phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md) | 3 | Austin | Calibrated energy-budget admission | `1b`, `2d`, `2f` | P1 | [#13](https://github.com/austincbaker/cap6411-cv-systems/issues/13) |
@@ -531,3 +531,35 @@ The original summary's development-only acceptance flags are historical and supe
 by D11 and this owner acceptance; raw samples and measured values are unchanged.
 No live tests are repeated. No dependency, priority, owner or milestone changes;
 the 61 prerequisite edges remain.
+
+
+### Revision 9 — 2026-11-15 — propagate the selected hand-gesture task
+
+**Trigger and authority:** Austin confirmed hand gestures as the forward scope and
+requested thorough propagation. This records the decision already stated in issue
+#5's 2026-11-10 closeout and the pilot merged in PR #41.
+
+**D01:** The primary task is `thumbs_up` and `peace_sign` from a fixed camera.
+Other motion and neither gesture are negatives; object/person change detection is
+legacy behavior outside the primary evaluation. The written onset/end rules require
+at least 0.5 seconds held; reappearance after the hand drops is a new event.
+
+**Handoff:** `2c` (Austin and James) must validate gesture observations, and `2b`
+(Alejandro) must derive gesture events consistently across policies. Unknown output
+must not silently clear confirmed state. Exact observation representation and
+rearming semantics must be specified and tested in those items before scored trials;
+this documentation update does not implement or declare acceptance of them.
+`2d` retains legacy-label compatibility while its primary hand-scored examples now
+use gestures. Schema version stays `1-draft`; consumer sign-off remains required.
+
+**Data and scoring:** PR #41 supplies 16 events in 10 annotated videos, one S1
+group and blank split fields, plus a documented control clip. It is pilot material,
+not completed grouped held-out data. `2e`, `3d` and `3e` remain required for the full
+dataset, one-to-one matcher and scoring CLI. Gate-window coverage is a development
+aid and cannot substitute for prediction-based precision/recall/F1 or response delay.
+
+**Propagation:** Refresh both plan copies, affected work-item plans and issue bodies,
+README, data protocol, methodology, contract examples and repository guidance.
+Keep historical revision entries, measured artifacts and legacy runtime behavior
+intact. No dependency edges, priorities or issue states change. The local ownership
+text for 2c/2d is aligned with their existing live assignments to Austin and James.

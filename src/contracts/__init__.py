@@ -43,7 +43,8 @@ REQUEST_STATUSES = frozenset(
 SCHEDULE_ORIGINS = frozenset({"app", "source", "gate"})
 POWER_SOURCES = frozenset({"windows_battery", "sysfs", "telemetry_error"})
 SPLITS = frozenset({"dev", "validation", "test"})
-# Provisional until item 1e (#5) fixes the event vocabulary.
+# Primary task: thumbs_up and peace_sign (plan revision 9).
+# Retain scene-change labels for legacy app logs until 2c/2b migrate producers.
 EVENT_LABELS = frozenset(
     {"person_enters", "person_leaves", "object_placed", "object_removed", "thumbs_up", "peace_sign"}
 )

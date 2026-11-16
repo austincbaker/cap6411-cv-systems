@@ -10,9 +10,13 @@
 **Depends on**: [1b](../phase-1-live-inference-and-measurement/1b-power-telemetry.md), [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md), [1f](../phase-1-live-inference-and-measurement/1f-measurement-protocol-and-research.md), [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md)
 **Blocks**: [2e](../phase-2-gated-application-and-contracts/2e-annotated-dataset-and-splits.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md), [3d](../phase-3-budget-control-and-evaluation-tools/3d-event-matching.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md), [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md)
 
+## Selected task and handoff (revision 9)
+
+Primary annotations and hand-scored examples use `thumbs_up` and `peace_sign`, with onset/end rules from `data/README.md`. Preserve separate source-evidence and response-availability clocks and one-to-one/duplicate rules. The draft validator continues accepting four legacy scene-change labels for existing app logs; this does not include them in the primary study. Austin and James own this contract handoff; Alejandro integrates producers and James/Shawn review consumers. Keep version `1-draft` until consumer sign-off.
+
 ## Scope
 
-Owners: Austin (lead drafter) and Alejandro; James and Shawn review the consumer interfaces. Freeze versioned file contracts and small synthetic examples by the end of Week 2. This is the handoff that lets evaluation software be developed independently of the running VLM. Rev. 6 adds the application run interface, a metrics/error-report schema and fixture, a shared contract validator, the `2b` event-derivation rules in the prediction contract, and AC/battery state in the run manifest.
+Owners: Austin and James; Alejandro integrates producers and Shawn reviews analysis consumers. Freeze versioned file contracts and small synthetic examples by the end of Week 2. This is the handoff that lets evaluation software be developed independently of the running VLM. Rev. 6 adds the application run interface, a metrics/error-report schema and fixture, a shared contract validator, the `2b` event-derivation rules in the prediction contract, and AC/battery state in the run manifest.
 
 ## Tasks
 

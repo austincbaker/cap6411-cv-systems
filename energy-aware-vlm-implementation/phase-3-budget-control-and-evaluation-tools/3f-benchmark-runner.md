@@ -10,6 +10,10 @@
 **Depends on**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md)
 **Blocks**: [3g](../phase-3-budget-control-and-evaluation-tools/3g-energy-analysis-and-reporting.md), [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
+## Selected task and handoff (revision 9)
+
+Launch every policy on the same gesture clips with the same prompt/parser/event derivation and preserve complete configuration and run IDs. Preliminary pilot logs may be collected now; quality comparisons require #9/#8 gesture integration and #16/#17 scoring.
+
 ## Scope
 
 Owner: Shawn, with Austin/Alejandro supplying the runnable application interface. Automate sequential benchmark trials from saved configurations. Preserve unique outputs and provenance so repeated runs can be audited and resumed deliberately.

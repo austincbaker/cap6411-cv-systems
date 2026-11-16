@@ -10,6 +10,10 @@
 **Depends on**: [2a](../phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md), [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [3a](../phase-3-budget-control-and-evaluation-tools/3a-energy-budget-controller.md)
 **Blocks**: [3h](../phase-3-budget-control-and-evaluation-tools/3h-pilot-and-evaluation-freeze.md)
 
+## Selected task and handoff (revision 9)
+
+Integrate validated gesture observations and shared gesture event derivation before quality-scored budget trials. All policies use the same `thumbs_up`/`peace_sign` semantics and preserve failed requests, unknown observations and timing provenance.
+
 ## Scope
 
 Owner: Alejandro. Connect the gate, budget admission and selected inference modes into a usable application. Preserve fixed-interval and gate-only policies for fair comparisons and fallback diagnosis. Image and output modes come from configuration using `2c` defaults; `3b` results inform `3h`, not this item (rev. 6). Keep the display minimal; UI polish does not block integration.

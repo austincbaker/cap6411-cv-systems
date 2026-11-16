@@ -10,6 +10,10 @@
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [2f](../phase-2-gated-application-and-contracts/2f-benchmark-configurations.md)
 
+## Selected task and handoff (revision 9)
+
+Define measurement controls around the selected hand-gesture task. Measure energy, invocation count, gesture quality and response delay separately; gate coverage alone is not event quality.
+
 ## Scope
 
 Owner: Shawn. Establish measurement controls and research framing before benchmark implementation. Define fair comparisons and distinguish whole-system battery draw from processor-domain energy.

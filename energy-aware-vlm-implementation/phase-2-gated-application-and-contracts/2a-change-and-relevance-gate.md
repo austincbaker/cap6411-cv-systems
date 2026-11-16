@@ -5,14 +5,18 @@
 **GitHub blocked by:** [1c (#3)](https://github.com/austincbaker/cap6411-cv-systems/issues/3), [1d (#4)](https://github.com/austincbaker/cap6411-cv-systems/issues/4), [1e (#5)](https://github.com/austincbaker/cap6411-cv-systems/issues/5)
 
 **Phase**: 2 — Deliver a gated application and evaluation contracts
-**Status**: 🟢 Done (tuned on gesture development clips; check clips with object events before relying on the defaults for them)
+**Status**: 🟢 Done (tuned on gesture development clips; final gesture quality evaluation remains pending)
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D04, D05, D07; R05
 **Depends on**: [1c](../phase-1-live-inference-and-measurement/1c-webcam-and-replay.md), [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md)
 **Blocks**: [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [3c](../phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md)
 
+## Selected task and handoff (revision 9)
+
+Tune and validate the gate for `thumbs_up` and `peace_sign` against idle, irrelevant hand/body motion, lighting variation and occlusion. Existing gate-window checks are development evidence; final quality requires predictions scored by #16/#17.
+
 ## Scope
 
-Owner: Alejandro. Add cheap downsampled and regional change detection, then relevance rules that prioritize meaningful workspace events. Include retained references, persistence, cooldowns and periodic refresh to reduce repeated calls without permanently missing subtle or gradual changes.
+Owner: Alejandro. Add cheap downsampled and regional change detection, then relevance rules that prioritize the selected hand gestures. Include retained references, persistence, cooldowns and periodic refresh to reduce repeated calls without permanently missing subtle or gradual changes.
 
 ## Tasks
 
