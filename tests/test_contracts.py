@@ -42,6 +42,7 @@ def test_valid_run_directory_conforms():
     "kind,name",
     [
         ("annotation", "annotations.csv"),
+        ("annotation", "annotations_gestures.csv"),
         ("power", "power_ac_online.csv"),
         ("metrics", "expected_metrics.json"),
         ("metrics", "expected_metrics_ac_online.json"),
@@ -227,3 +228,9 @@ def test_manifest_rejects_invalid_or_unordered_host_times():
     assert any("finite number" in issue for issue in validate_record("manifest", record))
     record["times"]["host_run_end_s"] = record["times"]["host_run_start_s"] - 1
     assert any("out of order" in issue for issue in validate_record("manifest", record))
+
+
+def test_pilot_gesture_vocabulary_is_accepted():
+    rows = load("annotation", FIXTURES / "annotations_gestures.csv")
+    assert {row["label"] for row in rows} == {"thumbs_up", "peace_sign"}
+    assert all(row["end_s"] - row["onset_s"] >= 0.5 for row in rows)

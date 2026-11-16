@@ -199,12 +199,21 @@ under WSL2.
 | `schema_version` | str | |
 | `video_id` | str | stem of the replayed file name (`pilot-desk-01` for `.../pilot-desk-01.mp4`) |
 | `event_id` | str | unique within the video |
-| `label` | str | from the event vocabulary, **provisional** until 1e: `person_enters`, `person_leaves`, `object_placed`, `object_removed` |
+| `label` | str | from the event vocabulary, **provisional** until 1e: `person_enters`, `person_leaves`, `object_placed`, `object_removed`, `thumbs_up`, `peace_sign` |
 | `onset_s` | float | source time when the event first becomes visible |
 | `end_s` | float, *null* | empty for an instantaneous event |
 | `group_id` | str | session or environment, for grouped splits (2e) |
 | `split` | str, *null* | `dev`, `validation` or `test` |
 | `annotator`, `notes` | str, *null* | |
+
+The pilot gesture labels extend the provisional vocabulary; the four scene-change
+labels remain valid. For `thumbs_up`, onset is when the thumb is fully up with the
+other fingers curled. For `peace_sign`, onset is when the index and middle
+fingers are fully up in a V with the others curled. Both intervals end when the
+hand starts to drop or the shape breaks. A gesture must be held for at least
+0.5 seconds to count; repeating it after the hand drops is a new event. Waving,
+scratching, reaching and other hand motion are negatives. These are ongoing
+visible-state intervals. See `data/README.md` for the pilot inventory.
 
 ### `predictions.jsonl` (kind `prediction`)
 
@@ -325,6 +334,8 @@ recomputes the expected values.
   - 1 late replay frame.
   - 5 predictions.
   - Battery reports every 10 s, one of which failed.
+- `annotations_gestures.csv`: two synthetic gesture intervals, one per added label,
+  including a gesture held for exactly 0.5 seconds.
 - `annotations.csv`: three events in `pilot-desk-01`, plus one in another
   video that must be ignored.
 - `expected_metrics.json`: the hand-scored result.

@@ -222,3 +222,4 @@ __marimo__/
 # Local model weights and measured run artifacts
 /models/
 /results/
+/data/videos/
