@@ -38,7 +38,9 @@
   `capture`, `contracts` and `gates`, not `src.vlm` etc.
   `app/` is not a package under `src/`; run it from the repository root.
   `tests/fixtures/contracts/` holds the item 2d contract fixtures.
-  `src/evaluation/`, `experiments/` and `data/` remain proposed
+  `data/README.md` documents the pilot gestures; `data/annotations/` holds their
+  annotations and `data/videos/` is ignored for local raw media.
+  `src/evaluation/` and `experiments/` remain proposed
   until their items are implemented.
 - **Key contracts:** `docs/data-contracts.md` (item `2d`, version `1-draft`
   until James and Shawn sign off) is the authoritative file contract:
