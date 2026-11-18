@@ -113,8 +113,8 @@ def test_validated_answers_name_a_window_and_invalid_ones_never_do(tmp_path):
         "fixed_interval",
         [
             (5.0, "ok", "A thumbs up.", None),  # did not validate: unknown, names nothing
-            (6.0, "ok", '{"gesture": "none"}', "none"),
-            (12.5, "ok", '{"gesture": "peace_sign"}', "peace_sign"),
+            (6.0, "ok", '{"hands": "resting", "gesture": "none"}', "none"),
+            (12.5, "ok", '{"hands": "two fingers", "gesture": "peace_sign"}', "peace_sign"),
         ],
     )
     windows = windows_csv(tmp_path / "w.csv", [["thumbs_up", 5, 8], ["peace_sign", 12, 14]])

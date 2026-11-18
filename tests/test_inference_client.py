@@ -55,9 +55,11 @@ def test_repeated_images_keep_one_transport_and_fresh_evidence():
 def test_response_format_is_sent_as_given_and_only_when_given():
     bodies = []
 
+    answer = '{"hands": "resting", "gesture": "none"}'
+
     def handler(request):
         bodies.append(json.loads(request.content))
-        return httpx.Response(200, json=completion('{"gesture": "none"}'))
+        return httpx.Response(200, json=completion(answer))
 
     schema = {"type": "json_schema", "json_schema": {"name": "g", "schema": {"type": "object"}}}
     with VLMClient(transport=httpx.MockTransport(handler)) as client:
@@ -67,7 +69,7 @@ def test_response_format_is_sent_as_given_and_only_when_given():
             client.infer(b"image", frame_id="2", response_format="json")
     assert bodies[0]["response_format"] == schema and "response_format" not in bodies[1]
     assert len(bodies) == 2  # the bad call was refused locally
-    assert constrained.text == '{"gesture": "none"}' and free.ok  # text is returned unparsed
+    assert constrained.text == answer and free.ok  # text is returned unparsed
 
 
 @pytest.mark.parametrize(

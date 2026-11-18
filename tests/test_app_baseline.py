@@ -192,10 +192,10 @@ def test_failures_are_logged_and_do_not_replace_confirmed_state(tmp_path, clip):
 
 def test_answers_are_validated_and_invalid_ones_are_kept_as_unknown(tmp_path, clip):
     texts = [
-        '{"gesture": "thumbs_up"}',
+        '{"hands": "thumb up", "gesture": "thumbs_up"}',
         "The person is making a thumbs up gesture.",  # the constraint did not hold
-        '{"gesture": "Thumbs_Up"}',  # not exactly the vocabulary: never normalized
-        '{\n  "gesture": "none"\n}',
+        '{"hands": "thumb up", "gesture": "Thumbs_Up"}',  # not exactly the vocabulary
+        '{\n  "hands": "resting",\n  "gesture": "none"\n}',
     ]
     llama = FakeLlama(texts=texts)
     config = config_for(tmp_path, "--interval-s", "0.25", "--duration-s", "0.9", video=clip)

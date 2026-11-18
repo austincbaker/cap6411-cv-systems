@@ -137,8 +137,10 @@ One line per VLM request the app sent, including failed and abandoned ones.
 
 The app asks every request the gesture question with a JSON schema that
 llama-server turns into a grammar (`response_format`, defined in
-`src/vlm/prompts.py`), so a well-behaved server answers exactly
-`{"gesture": "thumbs_up"}`, `{"gesture": "peace_sign"}` or `{"gesture": "none"}`.
+`src/vlm/prompts.py`), so a well-behaved server answers an object with a short
+free-text `hands` description first and then `gesture`, exactly `thumbs_up`,
+`peace_sign` or `none`, for example `{"hands": "thumb up", "gesture": "thumbs_up"}`.
+Only `gesture` is logged as the observation; `hands` stays in `text`.
 The app still validates every answer, exactly and without normalizing, and writes
 `gesture` and `answer_error` on every request. `status` stays the transport
 outcome: an `ok` request whose answer does not validate keeps `status` `ok`,
@@ -160,7 +162,7 @@ negative.
 | `error` | str, *null* | required when `status` is not `ok` |
 | `server_state_unknown` | bool | true when the server may still be working on it |
 | `gesture`? | str, *null* | the validated answer (2c): `thumbs_up`, `peace_sign` or `none` (a valid negative); *null* when the request failed or the answer did not validate |
-| `answer_error`? | str, *null* | why an `ok` answer is not a valid observation: `truncated`, `not_json`, `not_object`, `missing_gesture`, `unexpected_fields`, `out_of_vocabulary`; required when `status` is `ok` and `gesture` is *null*; *null* otherwise |
+| `answer_error`? | str, *null* | why an `ok` answer is not a valid observation: `truncated`, `not_json`, `not_object`, `missing_field`, `unexpected_fields`, `hands_not_text`, `out_of_vocabulary`; required when `status` is `ok` and `gesture` is *null*; *null* otherwise |
 | `gate_reason`? `gate_score`? `gate_global_score`? `gate_compute_s`? | | `gated` runs: why the gate sent it (`gate_initial`, `gate_change`, `gate_refresh`) and its score |
 | `elapsed_s`? `model`? `max_output_tokens`? `prompt_tokens`? `output_tokens`? `cached_tokens`? `finish_reason`? `http_status`? `encode_s`? `image_bytes`? | | client statistics; *null* when the server did not report them |
 
