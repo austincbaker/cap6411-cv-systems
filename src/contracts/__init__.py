@@ -50,6 +50,8 @@ EVENT_LABELS = frozenset(
 )
 # Validated per-frame answers (item 2c): one of the two gestures, or "none" for neither.
 GESTURE_OBSERVATIONS = frozenset({"thumbs_up", "peace_sign", "none"})
+# Gesture predictions (item 2b): a gesture starting or ending. Only onsets are matched to events.
+PREDICTION_TRANSITIONS = frozenset({"onset", "offset"})
 RUN_FILES = {
     "manifest": "manifest.json",
     "request": "requests.jsonl",
@@ -180,6 +182,8 @@ SCHEMAS: dict[str, tuple[Field, ...]] = {
         _f("run_id", "str"),
         _f("prediction_id", "str"),
         _f("label", "str"),
+        _f("transition", "str", opt=True, null=True, choices=PREDICTION_TRANSITIONS),
+        _f("onset_prediction_id", "str", opt=True, null=True),
         _f("request_id", "str"),
         _f("frame_id", "int"),
         _f("source_time_s", "float", null=True),
@@ -354,6 +358,10 @@ def _annotation_rules(r: dict) -> list[str]:
 
 def _prediction_rules(r: dict) -> list[str]:
     out = []
+    if r.get("transition") == "offset" and not r.get("onset_prediction_id"):
+        out.append("an offset needs the onset_prediction_id it ends")
+    elif r.get("transition") != "offset" and r.get("onset_prediction_id") is not None:
+        out.append("only an offset has an onset_prediction_id")
     if r["response_available_s"] < r["host_capture_s"]:
         out.append("response_available_s is before host_capture_s")
     src, avail = r["source_time_s"], r["available_source_time_s"]
@@ -519,15 +527,24 @@ def validate_run_dir(run_dir: Path | str) -> list[Issue]:
         records, found = read_artifact("prediction", predictions)
         issues.extend(found)
         request_ids = {r.get("request_id") for r in loaded["request"] if isinstance(r, dict)}
+        onsets: dict[str, str] = {}  # prediction_id -> label of each onset so far
         for i, record in enumerate(records):
             if not isinstance(record, dict):
                 continue
+            where = f"{predictions}[{i}]"
             if record.get("run_id") != run_id:
-                issues.append(Issue("prediction", f"{predictions}[{i}]", "run_id differs"))
+                issues.append(Issue("prediction", where, "run_id differs"))
             if record.get("request_id") not in request_ids:
-                issues.append(
-                    Issue("prediction", f"{predictions}[{i}]", "request_id not in requests.jsonl")
-                )
+                issues.append(Issue("prediction", where, "request_id not in requests.jsonl"))
+            if record.get("transition") == "offset" and record.get("onset_prediction_id"):
+                if onsets.get(record["onset_prediction_id"]) != record.get("label"):
+                    issues.append(
+                        Issue(
+                            "prediction", where, "offset does not end an earlier onset of its label"
+                        )
+                    )
+            elif (record.get("transition") or "onset") == "onset":
+                onsets[record.get("prediction_id")] = record.get("label")
     return issues
 
 

@@ -216,7 +216,11 @@ def test_answers_are_validated_and_invalid_ones_are_kept_as_unknown(tmp_path, cl
         run.state.confirmed.gesture == "none"
         and run.state.confirmed.frame_id == requests[3]["frame_id"]
     )
-    assert (result.run_dir / "predictions.jsonl").read_text() == ""
+    predictions = read_jsonl(result.run_dir / "predictions.jsonl")  # from valid answers only
+    assert [(p["transition"], p["request_id"]) for p in predictions] == [
+        ("onset", requests[0]["request_id"]),
+        ("offset", requests[3]["request_id"]),
+    ]
 
 
 def test_unknown_server_state_pauses_requests_until_the_server_is_idle(tmp_path, clip):

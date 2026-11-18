@@ -18,7 +18,7 @@ Run directory (``--run-dir``, default ``runs/<UTC time>_<source>/``):
   host request start / response-available times, status, text or error type)
 - ``drops.jsonl``     skipped ticks and frames the source dropped, with IDs and reasons
 - ``power.csv``       power/energy samples, one row per sensor reading
-- ``predictions.jsonl`` predicted events (item 2b); this version derives none, so it is empty
+- ``predictions.jsonl`` gesture onsets and offsets from the shared scene derivation (item 2b)
 - ``manifest.json``   config, source metadata, end reasons, counts, power state, platform
 
 All ``host_*`` times are ``time.monotonic()`` seconds in this process;
@@ -67,7 +67,7 @@ import cv2
 import httpx
 import numpy as np
 
-from app.state import ObservationState, render_overlay
+from app.state import Evidence, GestureScene, ObservationState, render_overlay
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
 from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
@@ -510,6 +510,8 @@ class BaselineRun:
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
         self.state = ObservationState()
+        self.scene = GestureScene()
+        self.open_onset: Optional[str] = None  # prediction_id of the gesture onset still up
         self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
@@ -809,9 +811,51 @@ class BaselineRun:
             host_capture_s=record["host_capture_s"],
             host_response_available_s=record["response_available_s"],
         )
+        self._derive_predictions(record)
         if record.get("server_state_unknown") and self.server_unknown_since is None:
             self.server_unknown_since = time.monotonic()
         self.in_flight = None
+
+    def _derive_predictions(self, record: dict) -> None:
+        """Shared event derivation (2b): the validated answer against the confirmed gesture.
+
+        A failed request or an invalid answer is unknown: the scene keeps its gesture.
+        """
+        evidence = None
+        if record["gesture"] is not None:
+            evidence = Evidence(
+                request_id=record["request_id"],
+                frame_id=record["frame_id"],
+                source_time_s=record["source_time_s"],
+                host_capture_s=record["host_capture_s"],
+                response_available_s=record["response_available_s"],
+            )
+        for event in self.scene.update(record["gesture"], evidence):
+            self.state.bump(f"prediction:{event.transition}:{event.gesture}")
+            prediction_id = f"p{self.predictions_log.lines + 1:05d}"
+            link = {}
+            if event.transition == "onset":
+                self.open_onset = prediction_id
+            else:
+                link = {"onset_prediction_id": self.open_onset}
+                self.open_onset = None
+            self.predictions_log.write(
+                {
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": self.run_id,
+                    "prediction_id": prediction_id,
+                    "label": event.gesture,
+                    "transition": event.transition,
+                    **link,
+                    "request_id": event.evidence.request_id,
+                    "frame_id": event.evidence.frame_id,
+                    "source_time_s": event.evidence.source_time_s,
+                    "host_capture_s": event.evidence.host_capture_s,
+                    "response_available_s": event.evidence.response_available_s,
+                    "available_source_time_s": event.evidence.available_source_time_s,
+                    "observation": {"gesture": event.answer},
+                }
+            )
 
     def _drain_results(self, timeout: float = 0.0) -> None:
         try:
@@ -925,9 +969,8 @@ class BaselineRun:
         if frame is None:
             return
         try:
-            cv2.imshow(
-                WINDOW_NAME, render_overlay(frame.image, self.state.overlay_lines(time.monotonic()))
-            )
+            lines = self.state.overlay_lines(time.monotonic()) + [self.scene.overlay_line()]
+            cv2.imshow(WINDOW_NAME, render_overlay(frame.image, lines))
             key = cv2.waitKey(1) & 0xFF
         except cv2.error as exc:
             self.display = False
@@ -1057,6 +1100,7 @@ class BaselineRun:
                 "prediction": PREDICTIONS_FILE,
             },
             "power_state": self.power_state,
+            "scene": self.scene.as_dict(),
             "source": {"info": info, "end": self.source.end.as_dict() if self.source.end else None},
             "vlm": {
                 "config": asdict(self.client.config),

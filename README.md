@@ -18,13 +18,13 @@ checks can run now. Complete scored comparisons still require:
 
 - **2c / #9 (Austin and James):** review of the gesture answer format below
   ("Gesture answers").
-- **2b / #8 (Alejandro):** shared gesture event derivation across all policies.
 - **3d / #16 and 3e / #17 (James):** one-to-one matching and scoring CLI.
 - **2e / #11 (James):** full dataset, grouped splits and annotation review before
   the 3h evaluation freeze and held-out trials.
 
-The app asks every frame the gesture question and validates each answer, but it
-derives no events yet (2b), so `predictions.jsonl` is empty. Gate-window coverage measures whether a frame was sampled; it does not establish
+The app asks every frame the gesture question, validates each answer and derives
+gesture onsets and offsets from the validated answers with one rule set for every
+policy (2b), written to `predictions.jsonl`. Gate-window coverage measures whether a frame was sampled; it does not establish
 precision, recall, F1 or response-available delay.
 
 ## Setup
@@ -360,6 +360,27 @@ the last valid answer. The manifest counts `answer:<gesture>` and
 `scripts/gate_check.py` matches its `--name` patterns against the validated
 `gesture` for runs that log one, so an invalid answer names nothing.
 
+### Gesture scene state (item 2b)
+
+Every policy feeds each request's validated answer to the same `GestureScene` in
+`app/state.py`, which holds the confirmed gesture (`thumbs_up`, `peace_sign` or
+`none`, starting at `none`) and the answer that last changed it:
+
+- a different valid answer changes it (after `confirm` answers in a row; the app
+  uses 1). A change to a gesture writes an `onset` to `predictions.jsonl`; a
+  change away from one writes an `offset` naming its onset
+  (`onset_prediction_id`), and a direct switch writes both, from one answer;
+- the same gesture again writes nothing, so a held gesture is one onset; after an
+  answer of `none` the same gesture is a new onset;
+- an unknown answer (failed request, or `answer_error`) changes nothing, so a
+  gesture stays up through timeouts and bad answers; the scene counts them as
+  `unknown_since_valid`.
+
+Each prediction carries the request, frame and times it came from, and the
+validated answer as `observation`. The manifest's `scene` holds the final state,
+`counts` has `prediction:<transition>:<label>`, and the display shows the
+confirmed gesture and the frame it changed on.
+
 Pending work stays bounded: at most one request is in flight, the capture
 thread keeps only the newest frame, and a busy tick is skipped rather than
 queued, so slow inference never replays a backlog.
@@ -385,9 +406,8 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   `valid=false` with an empty `value`, never `0`
 - `requests.jsonl` also carries the validated `gesture` and `answer_error` (item 2c,
   "Gesture answers" above)
-- `predictions.jsonl`: predicted events (item 2b) with the request, frame and
-  times they came from, including `available_source_time_s`; empty until 2b
-  derives gesture events
+- `predictions.jsonl`: gesture onsets and offsets (item 2b) with the request, frame
+  and times they came from, including `available_source_time_s`
 - `manifest.json`: policy, config, source metadata (backend, requested vs
   observed size/fps, time method), AC/battery state at start and end, source
   end reason, run end reason, counts, platform

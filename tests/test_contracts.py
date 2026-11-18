@@ -218,7 +218,9 @@ def test_expected_quality_counts_are_consistent():
         if a["video_id"] == m["video_id"]
     ]
     predictions = load("prediction", RUN / "predictions.jsonl")
-    assert (c["events"], c["predictions"]) == (len(events), len(predictions))
+    onsets = [p for p in predictions if p["transition"] == "onset"]  # only onsets are matched
+    assert [p["prediction_id"] for p in predictions if p not in onsets] == ["P6"]
+    assert (c["events"], c["predictions"]) == (len(events), len(onsets))
     assert c["true_positives"] + c["false_negatives"] == c["events"]
     assert c["true_positives"] + c["false_positives"] == c["predictions"]
     assert c["false_positives"] == c["duplicates"] + c["late"] + c["unmatched_predictions"]
@@ -230,6 +232,28 @@ def test_expected_quality_counts_are_consistent():
     assert m["f1"] == pytest.approx(2 * p * r / (p + r), abs=1e-6)
     delays = [x["delay_s"] for x in m["matches"] if x["outcome"] == "true_positive"]
     assert m["delay_s"]["mean"] == pytest.approx(sum(delays) / len(delays))
+
+
+def test_offsets_name_the_onset_they_end(tmp_path):
+    for path in RUN.iterdir():
+        (tmp_path / path.name).write_text(path.read_text())
+    lines = (tmp_path / "predictions.jsonl").read_text().splitlines()
+    lines[-1] = lines[-1].replace('"onset_prediction_id": "P5"', '"onset_prediction_id": "P3"')
+    (tmp_path / "predictions.jsonl").write_text("\n".join(lines) + "\n")
+    text = " | ".join(i.message for i in validate_run_dir(tmp_path))
+    assert "offset does not end an earlier onset of its label" in text  # P3 is a peace_sign
+
+    record = load("prediction", RUN / "predictions.jsonl")[-1]
+    assert record["transition"] == "offset"
+    assert validate_record("prediction", {**record, "onset_prediction_id": None}) == [
+        "an offset needs the onset_prediction_id it ends"
+    ]
+    onset = {**record, "transition": "onset"}
+    assert validate_record("prediction", onset) == ["only an offset has an onset_prediction_id"]
+    assert (
+        "'transition' value 'start'"
+        in validate_record("prediction", {**record, "transition": "start"})[0]
+    )
 
 
 def test_prediction_rejects_incorrect_source_availability():
@@ -260,4 +284,12 @@ def test_hand_scored_quality_fixture_uses_selected_gestures():
     assert {row["label"] for row in predictions} == labels
     assert all(row["end_s"] - row["onset_s"] >= 0.5 for row in annotations)
     requests = {row["request_id"]: row for row in load("request", RUN / "requests.jsonl")}
-    assert all(requests[row["request_id"]]["gesture"] == row["label"] for row in predictions)
+    assert all(
+        requests[row["request_id"]]["gesture"] == row["observation"]["gesture"]
+        for row in predictions
+    )
+    assert all(
+        row["observation"]["gesture"] == row["label"]
+        for row in predictions
+        if row["transition"] == "onset"
+    )
