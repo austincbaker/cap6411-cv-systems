@@ -17,7 +17,7 @@ from contracts import (
     validate_record,
     validate_run_dir,
 )
-from vlm.prompts import GESTURES
+from vlm.prompts import GESTURES, parse_gesture_answer
 
 FIXTURES = Path(__file__).parent / "fixtures" / "contracts"
 RUN = FIXTURES / "run_valid"
@@ -91,6 +91,9 @@ def test_requests_carry_validated_answers_beside_the_raw_text():
         ("A desk.", "not_json")
     ]
     assert all(r["gesture"] is None and r["answer_error"] is None for r in requests if r not in oks)
+    for r in oks:  # the logged answer is what the app's validation makes of the raw text
+        answer = parse_gesture_answer(r["text"], r.get("finish_reason"))
+        assert (answer.gesture, answer.error) == (r["gesture"], r["answer_error"])
     assert GESTURE_OBSERVATIONS == set(GESTURES)  # the validator and the app share the vocabulary
 
 

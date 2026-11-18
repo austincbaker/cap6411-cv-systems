@@ -338,21 +338,29 @@ check. Keep the frames, recordings and outputs local.
 
 ### Gesture answers (item 2c)
 
-Every request asks one question about the frame (`--prompt`, default "Is the
-person making a thumbs up, a peace sign, or neither? Answer with one word:
-thumbs_up, peace_sign, or none.") and sends the JSON schema in
-`src/vlm/prompts.py` as `response_format`. llama-server turns the schema into a
-grammar, so the model can only answer `{"gesture": "thumbs_up"}`,
-`{"gesture": "peace_sign"}` or `{"gesture": "none"}`; `none` is a valid
-negative. The schema costs output tokens: on the Mac mini an answer is 16 to 24
-tokens (about 0.1 to 0.17 s) where a free-text answer was 3 to 13.
+Every request asks one question about the frame (`--prompt`, default "Describe
+what the person's hands are doing in a few words, then say whether the person is
+making a thumbs up, a peace sign, or neither (none).") and sends the JSON schema
+in `src/vlm/prompts.py` as `response_format`. llama-server turns the schema into
+a grammar, so the model can only answer an object with a short `hands`
+description (at most 80 characters) followed by `gesture`, which is exactly
+`thumbs_up`, `peace_sign` or `none`:
+
+```json
+{"hands": "thumb up", "gesture": "thumbs_up"}
+```
+
+`none` is a valid negative. Only `gesture` is the observation; `hands` is there
+because the model writes it before it picks: asked for `gesture` alone,
+SmolVLM2 answers `thumbs_up` for every frame. On the Mac mini an answer is
+about 24 output tokens and a call takes about 2.5 s.
 
 The app validates every `ok` answer exactly (`vlm.prompts.parse_gesture_answer`,
 no normalizing) and writes the result next to the raw `text` in
 `requests.jsonl`: `gesture`, or `answer_error` (`truncated`, `not_json`,
-`not_object`, `missing_gesture`, `unexpected_fields`, `out_of_vocabulary`) when
-the answer is not a valid observation, for example from a server that ignores
-`response_format`. The request `status` stays `ok`: the server did answer. An
+`not_object`, `missing_field`, `unexpected_fields`, `hands_not_text`,
+`out_of_vocabulary`) when the answer is not a valid observation, for example
+from a server that ignores `response_format`. The request `status` stays `ok`: the server did answer. An
 invalid answer is unknown, never a negative: the confirmed observation keeps
 the last valid answer. The manifest counts `answer:<gesture>` and
 `answer_invalid:<reason>`, and records the prompt and schema under `vlm`.

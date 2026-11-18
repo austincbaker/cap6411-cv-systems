@@ -116,7 +116,7 @@ From the repo root, after `uv sync --extra dev` and
 - One VLM answer takes about 3.7-5 s on the CPU server, so `--interval-s 2` actually
   looks every 4-6 s. Skipped ticks are logged as `tick_skipped_busy` in `drops.jsonl`.
 - Every request asks the gesture question, and the answer is constrained to
-  `{"gesture": "thumbs_up" | "peace_sign" | "none"}` (item 2c).
+  `{"hands": "<a few words>", "gesture": "thumbs_up" | "peace_sign" | "none"}` (item 2c).
 - Hold gestures 5+ s and start them at least 5 s into a recording, or the sampler may miss them.
   Example: on one fixed 2 s run of `recording_1_thumbs` the VLM looked at 4 s and 10 s and
   never saw the 5-8 s thumbs up.

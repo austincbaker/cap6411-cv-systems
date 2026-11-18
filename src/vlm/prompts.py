@@ -2,9 +2,15 @@
 
 Every request asks one question about one frame, and llama-server constrains the
 answer with ``GESTURE_RESPONSE_FORMAT`` (a JSON schema it turns into a grammar), so
-a well-behaved server can only return one of::
+a well-behaved server can only return an object such as::
 
-    {"gesture": "thumbs_up"}    {"gesture": "peace_sign"}    {"gesture": "none"}
+    {"hands": "thumb up", "gesture": "thumbs_up"}
+    {"hands": "two fingers raised", "gesture": "peace_sign"}
+    {"hands": "none", "gesture": "none"}
+
+``hands`` is the model's own few words about the hands, written before it picks
+``gesture``; SmolVLM2 asked for ``gesture`` alone answers ``thumbs_up`` for every
+frame. Only ``gesture`` is the observation; ``hands`` stays in the raw text.
 
 ``"none"`` is a valid negative: the model saw neither gesture. The application
 still validates every answer with :func:`parse_gesture_answer`, because the
@@ -28,16 +34,22 @@ GESTURES = ("thumbs_up", "peace_sign", "none")
 GESTURE_EVENTS = ("thumbs_up", "peace_sign")  # the visible gestures; "none" is neither
 
 GESTURE_PROMPT = (
-    "Is the person making a thumbs up, a peace sign, or neither? "
-    "Answer with one word: thumbs_up, peace_sign, or none."
+    "Describe what the person's hands are doing in a few words, then say whether the person "
+    "is making a thumbs up, a peace sign, or neither (none)."
 )
+HANDS_MAX_CHARS = 80  # bounds the description, so the answer fits the output token bound
 
+# Properties in this order: the server's grammar writes ``hands`` before ``gesture``.
 GESTURE_SCHEMA = {
     "type": "object",
-    "properties": {"gesture": {"type": "string", "enum": list(GESTURES)}},
-    "required": ["gesture"],
+    "properties": {
+        "hands": {"type": "string", "maxLength": HANDS_MAX_CHARS},
+        "gesture": {"type": "string", "enum": list(GESTURES)},
+    },
+    "required": ["hands", "gesture"],
     "additionalProperties": False,
 }
+ANSWER_FIELDS = frozenset(GESTURE_SCHEMA["properties"])
 
 # OpenAI-style structured output; llama-server compiles the schema to a grammar.
 GESTURE_RESPONSE_FORMAT = {
@@ -50,8 +62,9 @@ ANSWER_ERRORS = (
     "truncated",  # the server stopped at the output bound before the answer was complete
     "not_json",  # the text is not JSON
     "not_object",  # JSON, but not an object
-    "missing_gesture",  # no "gesture" field
-    "unexpected_fields",  # fields other than "gesture"
+    "missing_field",  # no "hands" or no "gesture" field
+    "unexpected_fields",  # fields other than "hands" and "gesture"
+    "hands_not_text",  # "hands" is not a string
     "out_of_vocabulary",  # "gesture" is not exactly one of GESTURES
 )
 
@@ -75,6 +88,10 @@ class GestureAnswer:
 def parse_gesture_answer(text: Optional[str], finish_reason: Optional[str] = None) -> GestureAnswer:
     """Validate one model answer exactly; nothing is normalized or guessed.
 
+    ``hands`` may say anything (it is never checked against ``gesture``); a
+    description longer than ``HANDS_MAX_CHARS`` still validates, since the bound
+    is the server's to enforce.
+
     ``finish_reason`` is the server's; ``"length"`` means the output bound cut
     the answer short, which is reported as ``truncated`` when the text does not
     parse.
@@ -85,10 +102,12 @@ def parse_gesture_answer(text: Optional[str], finish_reason: Optional[str] = Non
         return GestureAnswer(None, "truncated" if finish_reason == "length" else "not_json")
     if not isinstance(value, dict):
         return GestureAnswer(None, "not_object")
-    if "gesture" not in value:
-        return GestureAnswer(None, "missing_gesture")
-    if set(value) != {"gesture"}:
+    if not ANSWER_FIELDS <= set(value):
+        return GestureAnswer(None, "missing_field")
+    if set(value) != ANSWER_FIELDS:
         return GestureAnswer(None, "unexpected_fields")
+    if not isinstance(value["hands"], str):
+        return GestureAnswer(None, "hands_not_text")
     gesture = value["gesture"]
     if not isinstance(gesture, str) or gesture not in GESTURES:
         return GestureAnswer(None, "out_of_vocabulary")
