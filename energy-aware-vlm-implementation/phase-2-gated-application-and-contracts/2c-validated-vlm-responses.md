@@ -5,7 +5,7 @@
 **GitHub blocked by:** [1a (#1)](https://github.com/austincbaker/cap6411-cv-systems/issues/1), [1e (#5)](https://github.com/austincbaker/cap6411-cv-systems/issues/5)
 
 **Phase**: 2 — Deliver a gated application and evaluation contracts
-**Status**: ⬜ Not started
+**Status**: 🟢 Done (answer format proposed by Alejandro for Austin and James's review; pilot quality is a Mac mini functional check)
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D01, D03, D06, D07; R05
 **Depends on**: [1a](../phase-1-live-inference-and-measurement/1a-local-vlm-inference.md), [1e](../phase-1-live-inference-and-measurement/1e-event-definitions-and-pilot-data.md)
 **Blocks**: [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3b](../phase-3-budget-control-and-evaluation-tools/3b-inference-cost-ablations.md)
@@ -20,9 +20,9 @@ Owners: Austin and James. Constrain prompts and validate model responses against
 
 ## Tasks
 
-- [ ] Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions.
-- [ ] Validate parsed output, preserve original request status and distinguish observations from inferred state changes.
-- [ ] Emit source-frame and response-available timestamps plus supported token/cache statistics.
+- [x] Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions.
+- [x] Validate parsed output, preserve original request status and distinguish observations from inferred state changes.
+- [x] Emit source-frame and response-available timestamps plus supported token/cache statistics.
 
 ## Files to be touched
 
@@ -40,8 +40,8 @@ None newly surfaced. Apply the parent plan and resolve measured settings in the 
 
 ## Acceptance criteria
 
-- [ ] Valid output maps to the task's declared fields and malformed responses are explicit failures.
-- [ ] Each prediction can be traced to its input frame and completion time.
+- [x] Valid output maps to the task's declared fields and malformed responses are explicit failures.
+- [x] Each prediction can be traced to its input frame and completion time.
 
 ## Definition of Done
 
@@ -49,9 +49,9 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | — | ⬜ |
-| 2 | Validate parsed output, preserve original request status and distinguish observations from inferred state changes. | [Tasks](#tasks) | Malformed text does not silently become a correct event. | — | ⬜ |
-| 3 | Emit source-frame and response-available timestamps plus supported token/cache statistics. | [Tasks](#tasks) | Unavailable counts remain missing and successful responses carry both timestamps. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 1 | Define bounded prompts and a structured per-frame observation (visible `thumbs_up`, `peace_sign`, or neither) aligned with James's event definitions. | [Tasks](#tasks) | The prompt/schema uses the selected task vocabulary. | src/vlm/prompts.py:27, src/vlm/prompts.py:43, app/main.py:636, tests/test_prompts.py:22, tests/test_prompts.py:28 (`{"gesture": "thumbs_up" \| "peace_sign" \| "none"}`, constrained by llama-server's `response_format` JSON schema) | 🟢 |
+| 2 | Validate parsed output, preserve original request status and distinguish observations from inferred state changes. | [Tasks](#tasks) | Malformed text does not silently become a correct event. | src/vlm/prompts.py:75, app/main.py:431, src/contracts/__init__.py:312, tests/test_prompts.py:72, tests/test_app_baseline.py:193 (request `status` stays the transport outcome; an invalid answer has `gesture` null and an `answer_error`, and never replaces the confirmed observation) | 🟢 |
+| 3 | Emit source-frame and response-available timestamps plus supported token/cache statistics. | [Tasks](#tasks) | Unavailable counts remain missing and successful responses carry both timestamps. | src/vlm/client.py:217, src/vlm/client.py:277, tests/test_inference_client.py:14, tests/test_app_baseline.py:107 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/data-contracts.md, README.md (Gesture answers) | 🟢 |
 
 <!-- impl-notes-anchor -->

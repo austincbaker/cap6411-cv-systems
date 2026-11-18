@@ -92,6 +92,24 @@
       "read_timeout_s": 4.0
     },
     "max_tokens": 64,
+    "prompt": "Is the person making a thumbs up, a peace sign, or neither? Answer with one word: thumbs_up, peace_sign, or none.",
+    "answer_schema": {
+      "type": "object",
+      "properties": {
+        "gesture": {
+          "type": "string",
+          "enum": [
+            "thumbs_up",
+            "peace_sign",
+            "none"
+          ]
+        }
+      },
+      "required": [
+        "gesture"
+      ],
+      "additionalProperties": false
+    },
     "server_properties": {
       "build_info": "b0-synthetic",
       "model_alias": "smolvlm2-500m-q8",
@@ -108,6 +126,10 @@
     "requests": 22,
     "status:ok": 21,
     "status:timeout": 1,
+    "answer:none": 15,
+    "answer:thumbs_up": 3,
+    "answer:peace_sign": 2,
+    "answer_invalid:not_json": 1,
     "tick_skipped_busy": 7,
     "replay_late": 1,
     "tick_skipped_server_unknown": 1,

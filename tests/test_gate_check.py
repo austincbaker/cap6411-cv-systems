@@ -65,8 +65,10 @@ def fake_run(run_dir, policy, requests, counts=None):
     run_dir.mkdir()
     (run_dir / "manifest.json").write_text(json.dumps({"policy": policy, "counts": counts or {}}))
     with (run_dir / "requests.jsonl").open("w") as handle:
-        for index, (t, status, text) in enumerate(requests):
+        for index, (t, status, text, *gesture) in enumerate(requests):
             record = {"request_id": f"r{index}", "source_time_s": t, "status": status, "text": text}
+            if gesture:  # a run that logs validated answers (item 2c)
+                record["gesture"] = gesture[0]
             handle.write(json.dumps(record) + "\n")
 
 
@@ -103,6 +105,22 @@ def test_check_run_counts_hits_latency_names_and_outside(tmp_path):
     assert (report["windows_caught"], report["windows_named"]) == (1, 1)
     assert report["outside_times_s"] == [0.0, 8.0, 20.0]
     assert report["gate"] == {"gate_change": 4} and report["tick_skipped_busy"] == 3
+
+
+def test_validated_answers_name_a_window_and_invalid_ones_never_do(tmp_path):
+    fake_run(
+        tmp_path / "run",
+        "fixed_interval",
+        [
+            (5.0, "ok", "A thumbs up.", None),  # did not validate: unknown, names nothing
+            (6.0, "ok", '{"gesture": "none"}', "none"),
+            (12.5, "ok", '{"gesture": "peace_sign"}', "peace_sign"),
+        ],
+    )
+    windows = windows_csv(tmp_path / "w.csv", [["thumbs_up", 5, 8], ["peace_sign", 12, 14]])
+    names = {"thumbs_up": re.compile("thumb"), "peace_sign": re.compile("peace")}
+    report = check_run(tmp_path / "run", windows, 0.0, names)
+    assert [(w["calls"], w["named"]) for w in report["windows"]] == [(2, 0), (1, 1)]
 
 
 def test_tolerance_widens_both_edges(tmp_path, capsys):

@@ -1,105 +1,25 @@
-"""Observation, scene and display state for the app (items 1d and 2b).
+"""Observation and display state for the app (items 1d and 2c).
 
-The *confirmed* observation changes only on a successful, non-empty response,
-so a timeout or malformed reply never replaces the last good description.
-The latest request status is tracked separately so the display can show
-"timeout on frame 412" next to the still-current confirmed text.
+The *confirmed* observation changes only on a successful response whose answer
+validates (item 2c), so a timeout or a malformed answer never replaces the last
+good one. The latest request status is tracked separately so the display can
+show "timeout on frame 412" next to the still-current confirmed gesture.
 
 Updated only from the app's main thread; no locking needed.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Optional
 
 import cv2
 import numpy as np
 
-# ============================================================================ scene state (2b)
-#
-# Shared event derivation: every policy (fixed_interval, gated, later budget)
-# turns a successful response into a SceneObservation, differences it against
-# the confirmed scene and emits predicted events. Invalid or failed responses
-# leave the confirmed scene untouched, and an unchanged scene emits nothing.
-#
-# parse_observation is a stand-in until item 2c (#9) fixes the prompt and the
-# validated observation format: it reads a comma-separated object list such as
-# "The objects are a gray mug, a phone and a man." and keeps each item's last
-# word (its head noun) so wording like "red mug" vs "mug" does not churn.
-
-SCENE_PROMPT = "Name the objects you see, separated by commas."
-PERSON_WORDS = frozenset(
-    {"person", "people", "man", "men", "woman", "women", "boy", "girl", "someone", "human", "child"}
-)
-_LEAD_IN = re.compile(
-    r"^\s*(?:in the (?:image|picture|frame)[, ]*)?(?:the |i see |there (?:is|are) )?"
-    r"(?:objects? (?:that )?(?:i see |visible |in the (?:image|picture) )?(?:are|is|include)\s*:?)?",
-    re.IGNORECASE,
-)
-_ARTICLES = re.compile(r"^(?:a|an|the|some|two|three|several|one)\s+", re.IGNORECASE)
-
-
-@dataclass(frozen=True)
-class SceneObservation:
-    person: bool
-    objects: frozenset[str]
-
-    def as_dict(self) -> dict:
-        return {"person": self.person, "objects": sorted(self.objects)}
-
-
-def parse_observation(text: Optional[str]) -> Optional[SceneObservation]:
-    """Comma-separated object list -> observation, or None when nothing usable is listed."""
-    if not text or not text.strip():
-        return None
-    body = _LEAD_IN.sub("", text.strip(), count=1).strip().rstrip(".!")
-    items = [part.strip() for part in re.split(r",|\band\b|;|\n", body)]
-    nouns = set()
-    for item in items:
-        item = _ARTICLES.sub("", re.sub(r"[^a-z\s-]", "", item.lower())).strip()
-        if item and item not in ("none", "nothing"):
-            nouns.add(item.split()[-1])
-    if not nouns and "none" not in body.lower() and "nothing" not in body.lower():
-        return None
-    person = bool(nouns & PERSON_WORDS)
-    return SceneObservation(person=person, objects=frozenset(nouns - PERSON_WORDS))
-
-
-def derive_events(
-    before: Optional[SceneObservation], after: SceneObservation
-) -> list[tuple[str, Optional[str]]]:
-    """(label, object) pairs for what changed; the first observation only sets the scene."""
-    if before is None:
-        return []
-    events: list[tuple[str, Optional[str]]] = []
-    if after.person and not before.person:
-        events.append(("person_enters", None))
-    if before.person and not after.person:
-        events.append(("person_leaves", None))
-    events += [("object_placed", o) for o in sorted(after.objects - before.objects)]
-    events += [("object_removed", o) for o in sorted(before.objects - after.objects)]
-    return events
-
-
-@dataclass
-class SceneState:
-    confirmed: Optional[SceneObservation] = None
-
-    def update(self, text: Optional[str]) -> Optional[list[tuple[str, Optional[str]]]]:
-        """Events for a successful response's text; None when the text is not a valid observation."""
-        observation = parse_observation(text)
-        if observation is None:
-            return None
-        events = derive_events(self.confirmed, observation)
-        self.confirmed = observation
-        return events
-
 
 @dataclass(frozen=True)
 class Observation:
-    text: str
+    gesture: str
     request_id: str
     frame_id: int
     source_time_s: Optional[float]
@@ -128,7 +48,7 @@ class ObservationState:
         self,
         *,
         status: str,
-        text: Optional[str],
+        gesture: Optional[str],
         error_type: Optional[str],
         request_id: str,
         frame_id: int,
@@ -142,9 +62,9 @@ class ObservationState:
         self.last_frame_id = frame_id
         self.last_status_host_s = host_response_available_s
         self.bump(f"status:{status}")
-        if status == "ok" and text:
+        if status == "ok" and gesture is not None:
             self.confirmed = Observation(
-                text=text,
+                gesture=gesture,
                 request_id=request_id,
                 frame_id=frame_id,
                 source_time_s=source_time_s,
@@ -158,7 +78,9 @@ class ObservationState:
             lines.append("no confirmed observation yet")
         else:
             age = now_s - self.confirmed.host_capture_s
-            lines.append(f"[frame {self.confirmed.frame_id}, {age:.1f}s old] {self.confirmed.text}")
+            lines.append(
+                f"[frame {self.confirmed.frame_id}, {age:.1f}s old] {self.confirmed.gesture}"
+            )
         if self.last_status is not None:
             detail = f" ({self.last_error_type})" if self.last_error_type else ""
             lines.append(f"last: {self.last_status}{detail} on frame {self.last_frame_id}")

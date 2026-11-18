@@ -18,7 +18,7 @@ Run directory (``--run-dir``, default ``runs/<UTC time>_<source>/``):
   host request start / response-available times, status, text or error type)
 - ``drops.jsonl``     skipped ticks and frames the source dropped, with IDs and reasons
 - ``power.csv``       power/energy samples, one row per sensor reading
-- ``predictions.jsonl`` predicted events from the shared scene derivation (item 2b)
+- ``predictions.jsonl`` predicted events (item 2b); this version derives none, so it is empty
 - ``manifest.json``   config, source metadata, end reasons, counts, power state, platform
 
 All ``host_*`` times are ``time.monotonic()`` seconds in this process;
@@ -32,7 +32,11 @@ config / source failed to open / source ended in error, 130 interrupted,
 Inference uses ``vlm.client.VLMClient`` against an already running
 llama-server configured by ``--profile`` (default ``configs/inference.json``;
 start it with ``scripts/llama_runtime.py serve``). The app checks the server
-before creating a run directory. After a request whose server-side state is
+before creating a run directory. Every request asks the gesture question
+(``--prompt``) with the item 2c answer schema (``vlm.prompts``), and every
+answer is validated: ``requests.jsonl`` carries the validated ``gesture``
+(``thumbs_up``, ``peace_sign`` or ``none``), or ``answer_error`` when an ``ok``
+answer is not a valid observation. After a request whose server-side state is
 unknown (a read timeout), no new request is sent until the server reports no
 busy slot; ticks in between are logged as ``tick_skipped_server_unknown``.
 
@@ -63,13 +67,19 @@ import cv2
 import httpx
 import numpy as np
 
-from app.state import SCENE_PROMPT, ObservationState, SceneState, render_overlay
+from app.state import ObservationState, render_overlay
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
 from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
 from energy.windows import WindowsBatteryReader
 from gates import ChangeGate, GateConfig
 from vlm.client import VLMClient, VLMConfig
+from vlm.prompts import (
+    GESTURE_PROMPT,
+    GESTURE_RESPONSE_FORMAT,
+    GESTURE_SCHEMA,
+    parse_gesture_answer,
+)
 
 SCHEMA_VERSION = CONTRACT_VERSION
 POLICIES = ("fixed_interval", "gated")
@@ -199,8 +209,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     req.add_argument(
         "--prompt",
-        default=SCENE_PROMPT,
-        help="prompt per request (default: the object-list prompt the scene parser reads)",
+        default=GESTURE_PROMPT,
+        help="question sent with every frame (default: the gesture prompt); "
+        "answers are always constrained to the gesture schema",
     )
     req.add_argument(
         "--max-tokens",
@@ -417,6 +428,18 @@ def encode_jpeg(image: np.ndarray, quality: int) -> bytes:
     return buffer.tobytes()
 
 
+def answer_fields(record: dict) -> dict:
+    """The validated answer (item 2c) of one request record: ``gesture`` and ``answer_error``.
+
+    Only an ``ok`` response has an answer to check; a failed request has neither field set,
+    since its ``status`` and ``error`` already say what went wrong.
+    """
+    if record["status"] != "ok":
+        return {"gesture": None, "answer_error": None}
+    answer = parse_gesture_answer(record["text"], record.get("finish_reason"))
+    return {"gesture": answer.gesture, "answer_error": answer.error}
+
+
 def default_run_dir(source: str) -> Path:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     base = Path("runs") / f"{stamp}_{source}"
@@ -487,7 +510,6 @@ class BaselineRun:
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
         self.state = ObservationState()
-        self.scene = SceneState()
         self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
@@ -611,6 +633,7 @@ class BaselineRun:
                 source_id=self.source.source_id,
                 source_time_s=frame.source_time_s,
                 max_tokens=self.max_tokens,
+                response_format=GESTURE_RESPONSE_FORMAT,
             )
         except Exception as exc:  # local validation or a client bug: visible, never retried
             ended = time.monotonic()
@@ -768,50 +791,27 @@ class BaselineRun:
         )
 
     def _handle_result(self, record: dict) -> None:
+        record.update(answer_fields(record))
+        if record["status"] == "ok":
+            self.state.bump(
+                f"answer:{record['gesture']}"
+                if record["gesture"] is not None
+                else f"answer_invalid:{record['answer_error']}"
+            )
         self.requests_log.write(record)
         self.state.record_result(
             status=record["status"],
-            text=record["text"],
-            error_type=record.get("error"),
+            gesture=record["gesture"],
+            error_type=record.get("error") or record["answer_error"],
             request_id=record["request_id"],
             frame_id=record["frame_id"],
             source_time_s=record["source_time_s"],
             host_capture_s=record["host_capture_s"],
             host_response_available_s=record["response_available_s"],
         )
-        if record["status"] == "ok":
-            self._derive_predictions(record)
         if record.get("server_state_unknown") and self.server_unknown_since is None:
             self.server_unknown_since = time.monotonic()
         self.in_flight = None
-
-    def _derive_predictions(self, record: dict) -> None:
-        """Shared event derivation (2b): difference the response against the confirmed scene."""
-        events = self.scene.update(record["text"])
-        if events is None:
-            self.state.bump("observation_invalid")  # confirmed scene left as it was
-            return
-        source_time = record["source_time_s"]
-        delay = record["response_available_s"] - record["host_capture_s"]
-        observation = self.scene.confirmed.as_dict()
-        for label, item in events:
-            self.state.bump(f"prediction:{label}")
-            self.predictions_log.write(
-                {
-                    "schema_version": SCHEMA_VERSION,
-                    "run_id": self.run_id,
-                    "prediction_id": f"p{self.predictions_log.lines + 1:05d}",
-                    "label": label,
-                    "object": item,
-                    "request_id": record["request_id"],
-                    "frame_id": record["frame_id"],
-                    "source_time_s": source_time,
-                    "host_capture_s": record["host_capture_s"],
-                    "response_available_s": record["response_available_s"],
-                    "available_source_time_s": None if source_time is None else source_time + delay,
-                    "observation": observation,
-                }
-            )
 
     def _drain_results(self, timeout: float = 0.0) -> None:
         try:
@@ -987,6 +987,8 @@ class BaselineRun:
                     "text": None,
                     "error": "abandoned_at_shutdown",
                     "server_state_unknown": True,
+                    "gesture": None,
+                    "answer_error": None,
                 }
             )
             self.state.bump("status:abandoned_at_shutdown")
@@ -1059,6 +1061,8 @@ class BaselineRun:
             "vlm": {
                 "config": asdict(self.client.config),
                 "max_tokens": self.max_tokens,
+                "prompt": self.config.prompt,
+                "answer_schema": GESTURE_SCHEMA,
                 "server_properties": self.server_properties,
             },
             "telemetry": (
