@@ -12,7 +12,7 @@
 
 ## Selected task and handoff (revision 9)
 
-Austin and James own bounded prompts and validated per-frame observations for `thumbs_up`, `peace_sign` and neither. Specify the exact representation with Alejandro before integration; distinguish unknown/malformed output from a valid negative. Test both labels, negatives, invalid output and timing provenance. The existing object-list prompt is a legacy stand-in, not the target interface.
+Austin and James own bounded prompts and validated per-frame observations for `thumbs_up`, `peace_sign` and neither. Specify the exact representation with Alejandro before integration; distinguish unknown/malformed output from a valid negative. Test both labels, negatives, invalid output and timing provenance.
 
 ## Scope
 
