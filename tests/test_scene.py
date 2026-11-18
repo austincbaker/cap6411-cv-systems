@@ -88,7 +88,7 @@ def test_scene_summary_for_the_manifest():
 
 
 def answer(gesture: str) -> str:
-    return json.dumps({"gesture": gesture})
+    return json.dumps({"hands": "a few words", "gesture": gesture})
 
 
 def test_app_writes_onsets_and_offsets_through_the_shared_derivation(tmp_path):
