@@ -54,8 +54,9 @@ been inspected; record that history before assigning any final split.
 The 0.5-second rule defines ground truth. The advice below to hold staged gestures
 for 5+ seconds helps pilot sampling and does not redefine the event vocabulary.
 Occlusion or an uncertain model answer must not be silently treated as a confirmed
-negative. Exact validated observations and event rearming behavior remain 2c/2b
-implementation work; all policies must use the same rules before scored trials.
+negative. Answers are validated against `thumbs_up`, `peace_sign` and `none` (2c,
+`gesture` in `requests.jsonl`); event rearming behavior remains 2b implementation
+work, and all policies must use the same rules before scored trials.
 
 ## Running the app on a video
 
@@ -88,10 +89,11 @@ From the repo root, after `uv sync --extra dev` and
    Replay runs in real time: a 20-minute video takes 20 minutes. Use `tmux` for long
    videos, or `--duration-s 300` to stop early. The last line ends in `exit=0` on success.
 
-3. See what the VLM said and when:
+3. See what the VLM said and when (`gesture` is the checked answer; it is empty when
+   the answer did not validate, and `answer_error` says why):
 
    ```bash
-   python3 -c "import json;[print(round(r['source_time_s'],1), r['status'], r['text']) for r in map(json.loads, open('results/rec1_fixed/requests.jsonl'))]"
+   python3 -c "import json;[print(round(r['source_time_s'],1), r['status'], r['gesture'], r['answer_error']) for r in map(json.loads, open('results/rec1_fixed/requests.jsonl'))]"
    ```
 
 4. Check whether the VLM looked during each gesture and named it. There is no event
@@ -107,16 +109,14 @@ From the repo root, after `uv sync --extra dev` and
    ```
 
    "windows caught" means a frame inside the gesture was sent; "named" means the
-   answer mentioned it.
+   checked answer was that gesture.
 
 ### Notes from the pilot runs
 
 - One VLM answer takes about 3.7-5 s on the CPU server, so `--interval-s 2` actually
   looks every 4-6 s. Skipped ticks are logged as `tick_skipped_busy` in `drops.jsonl`.
-- The default prompt asks for an object list, so the VLM never mentions gestures.
-  To test gestures, add:
-  `--prompt "Is the person making a thumbs up, a peace sign, or neither? Answer with one word: thumbs_up, peace_sign, or none."`
-  With that prompt, ignore `predictions.jsonl` (the parser still expects an object list).
+- Every request asks the gesture question, and the answer is constrained to
+  `{"hands": "<a few words>", "gesture": "thumbs_up" | "peace_sign" | "none"}` (item 2c).
 - Hold gestures 5+ s and start them at least 5 s into a recording, or the sampler may miss them.
   Example: on one fixed 2 s run of `recording_1_thumbs` the VLM looked at 4 s and 10 s and
   never saw the 5-8 s thumbs up.

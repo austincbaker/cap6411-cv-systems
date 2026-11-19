@@ -25,6 +25,7 @@ from energy.windows import WindowsBatteryReader, parse_report
 from tests.fakes.fake_capture import FAIL, CaptureFactory, FakeVideoCapture, solid_frame
 from tests.fakes.fake_llama import FakeLlama
 from tests.fakes.video import write_test_video
+from vlm.prompts import GESTURE_PROMPT, GESTURE_RESPONSE_FORMAT, GESTURE_SCHEMA
 
 
 @pytest.fixture
@@ -95,7 +96,7 @@ def test_changing_interval_changes_invocation_timing(tmp_path, clip):
         assert np.allclose(gaps, interval, atol=1e-6), gaps  # ticks sit on the fixed grid
         origin = result.manifest["times"]["host_tick_origin_s"]
         for r in requests:
-            assert r["status"] == "ok" and r["text"].startswith("fake description")
+            assert r["status"] == "ok" and r["gesture"] == "none" and r["answer_error"] is None
             assert 0 <= r["request_started_s"] - r["host_tick_s"] < 0.1
             # Each request used the newest frame at its tick: source time tracks tick time.
             assert abs(r["source_time_s"] - (r["host_tick_s"] - origin)) < 0.1
@@ -115,6 +116,8 @@ def test_requests_carry_the_frame_prompt_and_output_bound(tmp_path, clip):
         body["max_tokens"] == 32 and body["cache_prompt"] is False for body in llama.completions
     )
     assert llama.completions[0]["messages"][0]["content"][0]["text"] == config.prompt
+    assert config.prompt == GESTURE_PROMPT
+    assert all(body["response_format"] == GESTURE_RESPONSE_FORMAT for body in llama.completions)
     first = requests[0]
     assert (
         first["frame_id"] == 0
@@ -124,6 +127,8 @@ def test_requests_carry_the_frame_prompt_and_output_bound(tmp_path, clip):
     assert first["source_id"] == str(clip) and first["run_id"] == result.manifest["run_id"]
     assert result.manifest["vlm"]["server_properties"]["build_info"] == "b0-fake"
     assert result.manifest["vlm"]["max_tokens"] == 32
+    assert result.manifest["vlm"]["prompt"] == GESTURE_PROMPT
+    assert result.manifest["vlm"]["answer_schema"] == GESTURE_SCHEMA
 
 
 # --------------------------------------------------------------------------- overload
@@ -181,8 +186,37 @@ def test_failures_are_logged_and_do_not_replace_confirmed_state(tmp_path, clip):
 
     oks = [r for r in requests if r["status"] == "ok"]
     assert run.state.confirmed.frame_id == oks[-1]["frame_id"]
-    assert run.state.confirmed.text == oks[-1]["text"]
+    assert run.state.confirmed.gesture == oks[-1]["gesture"] == "none"
     assert result.exit_code == 0  # request failures are recorded, not fatal
+
+
+def test_answers_are_validated_and_invalid_ones_are_kept_as_unknown(tmp_path, clip):
+    texts = [
+        '{"hands": "thumb up", "gesture": "thumbs_up"}',
+        "The person is making a thumbs up gesture.",  # the constraint did not hold
+        '{"hands": "thumb up", "gesture": "Thumbs_Up"}',  # not exactly the vocabulary
+        '{\n  "hands": "resting",\n  "gesture": "none"\n}',
+    ]
+    llama = FakeLlama(texts=texts)
+    config = config_for(tmp_path, "--interval-s", "0.25", "--duration-s", "0.9", video=clip)
+    run, result = run_baseline(config, llama)
+    requests = read_jsonl(result.run_dir / "requests.jsonl")
+    assert [r["status"] for r in requests] == ["ok"] * 4  # transport status is kept
+    assert [(r["gesture"], r["answer_error"]) for r in requests] == [
+        ("thumbs_up", None),
+        (None, "not_json"),
+        (None, "out_of_vocabulary"),
+        ("none", None),
+    ]
+    assert [r["text"] for r in requests] == texts  # raw answers stay in the log
+    counts = result.manifest["counts"]
+    assert counts["answer:thumbs_up"] == counts["answer:none"] == 1
+    assert counts["answer_invalid:not_json"] == counts["answer_invalid:out_of_vocabulary"] == 1
+    assert (
+        run.state.confirmed.gesture == "none"
+        and run.state.confirmed.frame_id == requests[3]["frame_id"]
+    )
+    assert (result.run_dir / "predictions.jsonl").read_text() == ""
 
 
 def test_unknown_server_state_pauses_requests_until_the_server_is_idle(tmp_path, clip):
@@ -230,18 +264,26 @@ def test_client_exception_is_logged_not_fatal(tmp_path, clip):
     assert result.exit_code == 0
 
 
-def test_observation_state_keeps_confirmed_text_through_failures():
+def test_observation_state_keeps_confirmed_gesture_through_failures():
     state = ObservationState()
     common = dict(source_time_s=0.0, host_capture_s=1.0, host_response_available_s=2.0)
     state.record_result(
-        status="ok", text="a cat", error_type=None, request_id="r1", frame_id=1, **common
+        status="ok", gesture="thumbs_up", error_type=None, request_id="r1", frame_id=1, **common
     )
     state.record_result(
-        status="timeout", text=None, error_type="ReadTimeout", request_id="r2", frame_id=2, **common
+        status="timeout",
+        gesture=None,
+        error_type="ReadTimeout",
+        request_id="r2",
+        frame_id=2,
+        **common,
     )
-    assert state.confirmed.text == "a cat" and state.confirmed.frame_id == 1
+    state.record_result(
+        status="ok", gesture=None, error_type="not_json", request_id="r3", frame_id=3, **common
+    )
+    assert state.confirmed.gesture == "thumbs_up" and state.confirmed.frame_id == 1
     lines = state.overlay_lines(now_s=3.0)
-    assert "a cat" in lines[0] and "timeout" in lines[1] and "frame 2" in lines[1]
+    assert "thumbs_up" in lines[0] and "not_json" in lines[1] and "frame 3" in lines[1]
     image = np.zeros((48, 64, 3), np.uint8)
     out = render_overlay(image, lines)
     assert out.shape == image.shape and out.any() and not image.any()

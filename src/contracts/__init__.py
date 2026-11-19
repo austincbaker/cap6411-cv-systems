@@ -48,6 +48,8 @@ SPLITS = frozenset({"dev", "validation", "test"})
 EVENT_LABELS = frozenset(
     {"person_enters", "person_leaves", "object_placed", "object_removed", "thumbs_up", "peace_sign"}
 )
+# Validated per-frame answers (item 2c): one of the two gestures, or "none" for neither.
+GESTURE_OBSERVATIONS = frozenset({"thumbs_up", "peace_sign", "none"})
 RUN_FILES = {
     "manifest": "manifest.json",
     "request": "requests.jsonl",
@@ -116,6 +118,8 @@ SCHEMAS: dict[str, tuple[Field, ...]] = {
         _f("text", "str", null=True),
         _f("error", "str", null=True),
         _f("server_state_unknown", "bool"),
+        _f("gesture", "str", opt=True, null=True, choices=GESTURE_OBSERVATIONS),
+        _f("answer_error", "str", opt=True, null=True),
         _f("elapsed_s", "float", opt=True, null=True),
         _f("model", "str", opt=True, null=True),
         _f("max_output_tokens", "int", opt=True, null=True),
@@ -305,6 +309,14 @@ def _request_rules(r: dict) -> list[str]:
             out.append("status 'ok' needs response_available_s")
     elif not r.get("error"):
         out.append(f"status {r['status']!r} needs an error")
+    if "gesture" in r or "answer_error" in r:
+        gesture, answer_error = r.get("gesture"), r.get("answer_error")
+        if r["status"] != "ok" and (gesture is not None or answer_error is not None):
+            out.append("only an 'ok' request has a gesture or answer_error")
+        elif r["status"] == "ok" and gesture is None and not answer_error:
+            out.append("status 'ok' without a gesture needs an answer_error")
+        elif gesture is not None and answer_error is not None:
+            out.append("a valid gesture has no answer_error")
     if r["status"] == "abandoned_at_shutdown" and r["response_available_s"] is not None:
         out.append("abandoned_at_shutdown has no response_available_s")
     end = r["response_available_s"]

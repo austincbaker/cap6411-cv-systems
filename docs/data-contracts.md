@@ -134,6 +134,18 @@ may be missing (`null` or an empty cell).
 
 One line per VLM request the app sent, including failed and abandoned ones.
 
+The app asks every request the gesture question with a JSON schema that
+llama-server turns into a grammar (`response_format`, defined in
+`src/vlm/prompts.py`), so a well-behaved server answers an object with a short
+free-text `hands` description first and then `gesture`, exactly `thumbs_up`,
+`peace_sign` or `none`, for example `{"hands": "thumb up", "gesture": "thumbs_up"}`.
+Only `gesture` is logged as the observation; `hands` stays in `text`.
+The app still validates every answer, exactly and without normalizing, and writes
+`gesture` and `answer_error` on every request. `status` stays the transport
+outcome: an `ok` request whose answer does not validate keeps `status` `ok`,
+with `gesture` *null* and an `answer_error`. Such an answer is unknown, never a
+negative.
+
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
@@ -145,9 +157,11 @@ One line per VLM request the app sent, including failed and abandoned ones.
 | `host_capture_s`, `host_tick_s`, `request_started_s` | float | host time |
 | `response_available_s` | float, *null* | host time; *null* only for `abandoned_at_shutdown` |
 | `status` | str | `ok`, `timeout`, `connection_error`, `transport_error`, `http_error`, `invalid_response`, `empty_response`, `client_exception`, `abandoned_at_shutdown` |
-| `text` | str, *null* | nonempty when `status` is `ok` |
+| `text` | str, *null* | nonempty when `status` is `ok`; the raw answer, kept even when it does not validate |
 | `error` | str, *null* | required when `status` is not `ok` |
 | `server_state_unknown` | bool | true when the server may still be working on it |
+| `gesture`? | str, *null* | the validated answer (2c): `thumbs_up`, `peace_sign` or `none` (a valid negative); *null* when the request failed or the answer did not validate |
+| `answer_error`? | str, *null* | why an `ok` answer is not a valid observation: `truncated`, `not_json`, `not_object`, `missing_field`, `unexpected_fields`, `hands_not_text`, `out_of_vocabulary`; required when `status` is `ok` and `gesture` is *null*; *null* otherwise |
 | `gate_reason`? `gate_score`? `gate_global_score`? `gate_compute_s`? | | `gated` runs: why the gate sent it (`gate_initial`, `gate_change`, `gate_refresh`) and its score |
 | `elapsed_s`? `model`? `max_output_tokens`? `prompt_tokens`? `output_tokens`? `cached_tokens`? `finish_reason`? `http_status`? `encode_s`? `image_bytes`? | | client statistics; *null* when the server did not report them |
 
@@ -218,12 +232,13 @@ visible-state intervals. See `data/README.md` for the pilot inventory.
 
 ### `predictions.jsonl` (kind `prediction`)
 
-Predicted events from the shared 2b derivation: validated observations (2c)
-compared against the confirmed gesture state. Model text alone is never a
-prediction. Gesture observation validation and event derivation remain pending in
-2c/2b; the current object-list parser emits legacy events. All policies must share
-gesture confirmation, suppression and rearming semantics before scored trials.
-Unknown/invalid observations must not silently become a confirmed negative.
+Predicted events from the shared 2b derivation: validated observations (2c,
+`gesture` in `requests.jsonl`) compared against the confirmed gesture state.
+Model text alone is never a prediction. The gesture event derivation (2b) is
+pending, so the app currently writes an empty `predictions.jsonl`. All policies
+must share gesture confirmation, suppression and rearming semantics before
+scored trials. Unknown/invalid observations must not silently become a
+confirmed negative.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -234,7 +249,7 @@ Unknown/invalid observations must not silently become a confirmed negative.
 | `host_capture_s`, `response_available_s` | float | host time |
 | `available_source_time_s` | float, *null* | see "Time bases"; *null* exactly when `source_time_s` is |
 | `object`? | str, *null* | legacy object-event metadata; omit or use *null* for primary gesture events |
-| `observation`? | any | the observation behind it; gesture representation to be specified by 2c; legacy app uses `{person, objects}` |
+| `observation`? | any | the validated observation behind it, `{"gesture": ...}` as in the 2c answer; legacy logs use `{person, objects}` |
 
 ### `metrics.json` (kind `metrics`)
 
@@ -332,12 +347,13 @@ issues = validate_run_dir(run_dir)  # also checks run_id across files and predic
 to be checked by hand. `tests/test_contracts.py` validates every file and
 recomputes the expected values. The gesture prediction examples are synthetic
 contract targets, not evidence that the current app emits gesture events. Their
-`{gesture: label}` observation metadata is illustrative; 2c must specify the final
-validated representation with 2b.
+`{"gesture": label}` observation is the 2c answer format.
 
 - `run_valid/`: a 60 s replay of `pilot-desk-01` at 2 s intervals.
   - 30 ticks: 22 requests (21 `ok`, 1 `timeout` with unknown server state),
     7 busy skips, 1 server-unknown skip.
+  - 20 of the `ok` answers validate (15 `none`, 3 `thumbs_up`, 2
+    `peace_sign`); one is plain text (`answer_error` `not_json`).
   - 1 late replay frame.
   - 5 predictions.
   - Battery reports every 10 s, one of which failed.
@@ -366,6 +382,8 @@ validated representation with 2b.
 - `invalid/`: one file per failure kind:
   - wrong version and missing manifest field
   - `ok` with empty text, missing field, failure without an error, wrong type
+  - `ok` without a gesture or an `answer_error`, a gesture outside the vocabulary,
+    a gesture on a failed request
   - `0` written for a missing power value
   - end before onset, unknown label, unknown split
   - availability before evidence
@@ -375,8 +393,8 @@ validated representation with 2b.
 
 - **1e / 2e (James):** selected gesture rules are in `data/README.md`; complete
   reviewed grouped data and record public-candidate feasibility.
-- **2c (Austin and James):** validated gesture prompts and the structured
-  observation format behind `observation`.
+- **2c (Austin and James):** review the proposed answer format (`gesture` and
+  `answer_error` in `requests.jsonl`, `src/vlm/prompts.py`).
 - **2b (Alejandro):** shared gesture event derivation that writes `predictions.jsonl`.
 - **2a (Alejandro):** gate decision reasons in `drops.jsonl` (`origin: gate`).
 - **3h:** freeze `evidence_tolerance_s`, `horizon_s` and label

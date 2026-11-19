@@ -16,16 +16,15 @@ PR #41 supplies a pilot with 16 events in 10 annotated videos, one session group
 and no assigned splits, plus a documented control clip. Pilot replay and gate
 checks can run now. Complete scored comparisons still require:
 
-- **2c / #9 (Austin and James):** bounded gesture prompts and validated observations.
+- **2c / #9 (Austin and James):** review of the gesture answer format below
+  ("Gesture answers").
 - **2b / #8 (Alejandro):** shared gesture event derivation across all policies.
 - **3d / #16 and 3e / #17 (James):** one-to-one matching and scoring CLI.
 - **2e / #11 (James):** full dataset, grouped splits and annotation review before
   the 3h evaluation freeze and held-out trials.
 
-The current object-list prompt/parser and object/person predictions are legacy
-implementation awaiting those changes. A custom gesture prompt can inspect raw
-answers but does not make `predictions.jsonl` a valid gesture prediction stream.
-Gate-window coverage measures whether a frame was sampled; it does not establish
+The app asks every frame the gesture question and validates each answer, but it
+derives no events yet (2b), so `predictions.jsonl` is empty. Gate-window coverage measures whether a frame was sampled; it does not establish
 precision, recall, F1 or response-available delay.
 
 ## Setup
@@ -101,6 +100,9 @@ with VLMClient(VLMConfig()) as client:
     )
     print(result.to_dict())
 ```
+
+`response_format=` passes a structured-output request through unchanged, such as the
+gesture schema below; the answer text comes back unparsed.
 
 Every call submits fresh image data and an independent prompt. Callers serialize requests
 and own frame dropping/queue policy. Local input mistakes raise `ValueError`; attempted
@@ -334,24 +336,37 @@ rebuilds a given replay. The held stretch is a frozen frame and the cut into
 each clip is a scene change the gate should catch, so treat it as a functional
 check. Keep the frames, recordings and outputs local.
 
-### Legacy scene state and pending gesture events (item 2b)
+### Gesture answers (item 2c)
 
-Every policy currently runs the same legacy derivation in `app/state.py`.
-Items 2c and 2b must replace its interpretation with validated gesture
-observations and gesture events before primary quality evaluation. A successful
-response is parsed into an observation (person visible, set of objects), the
-observation is compared with the confirmed scene, and each difference becomes
-one line in `predictions.jsonl`: `person_enters`, `person_leaves`,
-`object_placed` or `object_removed` (with `object`). The first observation only
-sets the scene; an unchanged or reworded scene emits nothing; a failed request,
-or text the parser cannot read (`observation_invalid` in the manifest counts),
-leaves the confirmed scene as it was.
+Every request asks one question about the frame (`--prompt`, default "Describe
+what the person's hands are doing in a few words, then say whether the person is
+making a thumbs up, a peace sign, or neither (none).") and sends the JSON schema
+in `src/vlm/prompts.py` as `response_format`. llama-server turns the schema into
+a grammar, so the model can only answer an object with a short `hands`
+description (at most 80 characters) followed by `gesture`, which is exactly
+`thumbs_up`, `peace_sign` or `none`:
 
-The parser is a stand-in until item 2c fixes the prompt and observation
-format. It reads the default prompt's answer ("Name the objects you see,
-separated by commas."), keeps each item's head noun (`red mug` and `mug` are the
-same object) and treats person words as presence. A custom gesture `--prompt` is incompatible with this parser; any resulting
-object/person predictions must not be interpreted as gesture detections.
+```json
+{"hands": "thumb up", "gesture": "thumbs_up"}
+```
+
+`none` is a valid negative. Only `gesture` is the observation; `hands` is there
+because the model writes it before it picks: asked for `gesture` alone,
+SmolVLM2 answers `thumbs_up` for every frame. On the Mac mini an answer is
+about 24 output tokens and a call takes about 2.5 s.
+
+The app validates every `ok` answer exactly (`vlm.prompts.parse_gesture_answer`,
+no normalizing) and writes the result next to the raw `text` in
+`requests.jsonl`: `gesture`, or `answer_error` (`truncated`, `not_json`,
+`not_object`, `missing_field`, `unexpected_fields`, `hands_not_text`,
+`out_of_vocabulary`) when the answer is not a valid observation, for example
+from a server that ignores `response_format`. The request `status` stays `ok`: the server did answer. An
+invalid answer is unknown, never a negative: the confirmed observation keeps
+the last valid answer. The manifest counts `answer:<gesture>` and
+`answer_invalid:<reason>`, and records the prompt and schema under `vlm`.
+
+`scripts/gate_check.py` matches its `--name` patterns against the validated
+`gesture` for runs that log one, so an invalid answer names nothing.
 
 Pending work stays bounded: at most one request is in flight, the capture
 thread keeps only the newest frame, and a busy tick is skipped rather than
@@ -376,8 +391,11 @@ Check a run directory with `uv run contracts-check runs/<run>`.
   `source` = `windows_battery` (stored energy and discharge power, the
   qualified whole-laptop source) or `sysfs`. Unavailable readings are
   `valid=false` with an empty `value`, never `0`
+- `requests.jsonl` also carries the validated `gesture` and `answer_error` (item 2c,
+  "Gesture answers" above)
 - `predictions.jsonl`: predicted events (item 2b) with the request, frame and
-  times they came from, including `available_source_time_s`
+  times they came from, including `available_source_time_s`; empty until 2b
+  derives gesture events
 - `manifest.json`: policy, config, source metadata (backend, requested vs
   observed size/fps, time method), AC/battery state at start and end, source
   end reason, run end reason, counts, platform
