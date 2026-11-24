@@ -5,14 +5,14 @@
 **GitHub blocked by:** [1d (#4)](https://github.com/austincbaker/cap6411-cv-systems/issues/4), [2a (#7)](https://github.com/austincbaker/cap6411-cv-systems/issues/7), [2c (#9)](https://github.com/austincbaker/cap6411-cv-systems/issues/9)
 
 **Phase**: 2 — Deliver a gated application and evaluation contracts
-**Status**: 🟡 In progress (derivation implemented with a stand-in parser until 2c)
+**Status**: 🟢 Done (gesture onsets and offsets from 2c's validated answers; pilot quality is a Mac mini functional check)
 **Plan refs**: [Master plan](../plan.md#phase-2--deliver-a-gated-application-and-evaluation-contracts-week-2); D05, D06; R05
 **Depends on**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2a](../phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md), [2c](../phase-2-gated-application-and-contracts/2c-validated-vlm-responses.md)
 **Blocks**: [3c](../phase-3-budget-control-and-evaluation-tools/3c-budget-aware-application.md)
 
 ## Selected task and handoff (revision 9)
 
-Replace the legacy object/person event derivation with shared gesture event derivation for every policy. Consume #9 validated observations for `thumbs_up`, `peace_sign` and neither; specify and test confirmation, sustained-gesture suppression, rearming after a hand drop, class changes and unknown/occluded observations. Preserve failures and frame/response timestamps. The current object-list parser does not meet this gesture requirement.
+Replace the legacy object/person event derivation with shared gesture event derivation for every policy. Consume #9 validated observations for `thumbs_up`, `peace_sign` and neither; specify and test confirmation, sustained-gesture suppression, rearming after a hand drop, class changes and unknown/occluded observations. Preserve failures and frame/response timestamps.
 
 ## Scope
 
@@ -20,10 +20,10 @@ Owner: Alejandro. Bound inference work to one active request and one pending lat
 
 ## Tasks
 
-- [ ] Replace pending work with the latest eligible frame while inference is busy.
-- [ ] Update confirmed observations only from successful validated inference and suppress repeated unchanged notices.
-- [ ] Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies.
-- [ ] Add clean stop behavior and tests for slow requests, cooldown and refresh interactions.
+- [x] Replace pending work with the latest eligible frame while inference is busy.
+- [x] Update confirmed observations only from successful validated inference and suppress repeated unchanged notices.
+- [x] Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies.
+- [x] Add clean stop behavior and tests for slow requests, cooldown and refresh interactions.
 
 ## Files to be touched
 
@@ -41,8 +41,8 @@ None newly surfaced. Apply the parent plan and resolve measured settings in the 
 
 ## Acceptance criteria
 
-- [ ] At most one request and one pending frame exist at a time.
-- [ ] Repeated unchanged observations do not generate repeated event notifications.
+- [x] At most one request and one pending frame exist at a time.
+- [x] Repeated unchanged observations do not generate repeated event notifications.
 
 ## Definition of Done
 
@@ -50,10 +50,10 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Replace pending work with the latest eligible frame while inference is busy. | [Tasks](#tasks) | The pending queue never exceeds one frame. | app/main.py:393, tests/test_app_baseline.py:132 | 🟢 |
-| 2 | Update confirmed observations only from successful validated inference and suppress repeated unchanged notices. | [Tasks](#tasks) | Invalid responses leave the previous confirmed state intact. | app/state.py:87, tests/test_scene.py:51 | 🟡 |
-| 3 | Add clean stop behavior and tests for slow requests, cooldown and refresh interactions. | [Tasks](#tasks) | Slow inference does not replay a stale backlog after it finishes. | tests/test_app_baseline.py:132 | 🟡 |
-| 4 | Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies. | [Tasks](#tasks) | Fixed-interval and gated runs emit prediction records through the same derivation, documented in the `2d` prediction contract. | app/main.py:788, tests/test_scene.py:83, docs/data-contracts.md | 🟡 |
-| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 1 | Replace pending work with the latest eligible frame while inference is busy. | [Tasks](#tasks) | The pending queue never exceeds one frame. | app/main.py:404, app/main.py:517, tests/test_app_baseline.py:137 | 🟢 |
+| 2 | Update confirmed observations only from successful validated inference and suppress repeated unchanged notices. | [Tasks](#tasks) | Invalid responses leave the previous confirmed state intact. | app/state.py:80, tests/test_scene.py:36, tests/test_scene.py:61, tests/test_scene.py:144 (unknown answers keep the confirmed gesture; a held gesture is one onset) | 🟢 |
+| 3 | Add clean stop behavior and tests for slow requests, cooldown and refresh interactions. | [Tasks](#tasks) | Slow inference does not replay a stale backlog after it finishes. | tests/test_app_baseline.py:137, tests/test_app_baseline.py:295, tests/test_gate.py:79, tests/test_gate.py:87, tests/test_gate.py:95 | 🟢 |
+| 4 | Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies. | [Tasks](#tasks) | Fixed-interval and gated runs emit prediction records through the same derivation, documented in the `2d` prediction contract. | app/main.py:819, app/state.py:67, tests/test_scene.py:94, tests/test_scene.py:159, docs/data-contracts.md | 🟢 |
+| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | README.md (Gesture scene state) | 🟢 |
 
 <!-- impl-notes-anchor -->

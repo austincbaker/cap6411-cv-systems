@@ -127,7 +127,8 @@ may be missing (`null` or an empty cell).
 | `source` | object | `info` (backend, `time_method`, requested and observed size/fps, `drop_counts`), `end` (`reason`, `detail`, `complete`) |
 | `vlm` | object | client `config`, `max_tokens`, llama-server `server_properties` |
 | `telemetry` | object | `enabled`, plus intervals and the sensor inventory when enabled |
-| `counts` | object | `requests`, `status:<status>`, each skip reason, `frames_delivered`, `power_samples` |
+| `counts` | object | `requests`, `status:<status>`, `answer:<gesture>`, `answer_invalid:<answer_error>`, `prediction:<transition>:<label>`, each skip reason, `frames_delivered`, `power_samples` |
+| `scene`? | object | final gesture scene (2b): `gesture`, `confirm`, `changed` (the answer that last changed it, *null* if none did), `last_valid`, `unknown_since_valid` |
 | `platform` | object | OS, kernel release (shows WSL2), machine, Python and library versions |
 
 ### `requests.jsonl` (kind `request`)
@@ -234,22 +235,36 @@ visible-state intervals. See `data/README.md` for the pilot inventory.
 
 Predicted events from the shared 2b derivation: validated observations (2c,
 `gesture` in `requests.jsonl`) compared against the confirmed gesture state.
-Model text alone is never a prediction. The gesture event derivation (2b) is
-pending, so the app currently writes an empty `predictions.jsonl`. All policies
-must share gesture confirmation, suppression and rearming semantics before
-scored trials. Unknown/invalid observations must not silently become a
-confirmed negative.
+Model text alone is never a prediction. Every policy runs the same derivation
+(`app/state.py`, `GestureScene`):
+
+- The confirmed gesture starts at `none`. A validated answer that differs from it
+  confirms a change (after `confirm` answers in a row; the app uses 1).
+- A change to a gesture is an `onset` of that gesture. A change away from one is
+  an `offset` of it, which names its onset in `onset_prediction_id`. A direct
+  switch between the two gestures writes an offset and an onset from the same
+  answer.
+- The confirmed gesture answered again writes nothing, so a held gesture is one
+  onset. The same gesture after the hand drops (an answer of `none` in between)
+  is a new onset.
+- An unknown answer (a failed request, or an `ok` answer with an
+  `answer_error`) writes nothing and changes nothing: it is never a negative.
+
+Only onsets are matched to annotated events (see "Event matching"); offsets
+record when the predicted gesture ended.
 
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id`, `prediction_id` | str | |
-| `label` | str | normalized to the vocabulary; out-of-vocabulary labels are kept and scored as errors |
+| `label` | str | normalized to the vocabulary; out-of-vocabulary labels are kept and scored as errors; for an offset, the gesture that ended |
+| `transition`? | str, *null* | `onset` or `offset`; missing or *null* is an onset (older logs) |
+| `onset_prediction_id`? | str, *null* | offsets only, required there: the earlier onset of the same label that this offset ends |
 | `request_id`, `frame_id` | str, int | the request whose response produced it; must exist in `requests.jsonl` |
 | `source_time_s` | float, *null* | frame evidence |
 | `host_capture_s`, `response_available_s` | float | host time |
 | `available_source_time_s` | float, *null* | see "Time bases"; *null* exactly when `source_time_s` is |
 | `object`? | str, *null* | legacy object-event metadata; omit or use *null* for primary gesture events |
-| `observation`? | any | the validated observation behind it, `{"gesture": ...}` as in the 2c answer; legacy logs use `{person, objects}` |
+| `observation`? | any | the validated answer behind it, `{"gesture": ...}` as in the 2c answer (`none` for a plain offset); legacy logs use `{person, objects}` |
 
 ### `metrics.json` (kind `metrics`)
 
@@ -279,7 +294,8 @@ Parameters are provisional. Item 3h freezes them on validation data.
 | `horizon_s` | 10.0 |
 | label normalization | lowercase, spaces and hyphens to underscores |
 
-1. Use only annotations whose `video_id` matches the run's replayed file.
+1. Use only annotations whose `video_id` matches the run's replayed file, and
+   only onset predictions (`transition` `onset`, missing or *null*).
 2. A prediction is **eligible** for an event when the labels are equal after
    normalization and `onset_s − tol ≤ source_time_s ≤ (end_s or onset_s) + tol`.
 3. An eligible prediction is **on time** when
@@ -346,7 +362,7 @@ issues = validate_run_dir(run_dir)  # also checks run_id across files and predic
 `tests/fixtures/contracts/` holds one synthetic replay run with numbers chosen
 to be checked by hand. `tests/test_contracts.py` validates every file and
 recomputes the expected values. The gesture prediction examples are synthetic
-contract targets, not evidence that the current app emits gesture events. Their
+contract targets, not measured gesture-detection results. Their
 `{"gesture": label}` observation is the 2c answer format.
 
 - `run_valid/`: a 60 s replay of `pilot-desk-01` at 2 s intervals.
@@ -355,7 +371,8 @@ contract targets, not evidence that the current app emits gesture events. Their
   - 20 of the `ok` answers validate (15 `none`, 3 `thumbs_up`, 2
     `peace_sign`); one is plain text (`answer_error` `not_json`).
   - 1 late replay frame.
-  - 5 predictions.
+  - 5 predictions, all onsets, plus one offset (P6, the end of P5's
+    thumbs-up), which the matcher ignores.
   - Battery reports every 10 s, one of which failed.
 - `annotations_gestures.csv`: two synthetic gesture intervals, one per added label,
   including a gesture held for exactly 0.5 seconds.
@@ -395,7 +412,8 @@ contract targets, not evidence that the current app emits gesture events. Their
   reviewed grouped data and record public-candidate feasibility.
 - **2c (Austin and James):** review the proposed answer format (`gesture` and
   `answer_error` in `requests.jsonl`, `src/vlm/prompts.py`).
-- **2b (Alejandro):** shared gesture event derivation that writes `predictions.jsonl`.
+- **3d (James):** match only onset predictions (step 1 of "Event matching");
+  offsets carry `onset_prediction_id`.
 - **2a (Alejandro):** gate decision reasons in `drops.jsonl` (`origin: gate`).
 - **3h:** freeze `evidence_tolerance_s`, `horizon_s` and label
   normalization.

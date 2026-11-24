@@ -55,8 +55,10 @@ The 0.5-second rule defines ground truth. The advice below to hold staged gestur
 for 5+ seconds helps pilot sampling and does not redefine the event vocabulary.
 Occlusion or an uncertain model answer must not be silently treated as a confirmed
 negative. Answers are validated against `thumbs_up`, `peace_sign` and `none` (2c,
-`gesture` in `requests.jsonl`); event rearming behavior remains 2b implementation
-work, and all policies must use the same rules before scored trials.
+`gesture` in `requests.jsonl`), and every policy derives gesture onsets and offsets
+from them with the same rules (2b, README "Gesture scene state"): a failed or
+invalid answer keeps the confirmed gesture, and a gesture after an answer of `none`
+is a new onset.
 
 ## Running the app on a video
 
