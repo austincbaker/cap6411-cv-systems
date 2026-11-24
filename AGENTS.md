@@ -118,10 +118,12 @@ rather than duplicating it once those steps exist.
 - Hand gestures (`thumbs_up` and `peace_sign`) are the primary task (master-plan
   revision 9); other motion and neither gesture are negatives. Use the onset/end
   rules in `data/README.md`. Object/person event support is legacy behavior.
-- Items `2c` (Austin and James) and `2b` (Alejandro) still need gesture observation
-  validation and shared event derivation. Do not treat object-list predictions or
-  request-window coverage as scored gesture detections. Items `3d`/`3e` own
-  matching and scoring; `2e` owns complete grouped splits.
+- Item `2c` validates gesture observations; its answer format still needs Austin
+  and James's review. Item `2b` derives gesture onsets and linked offsets through
+  the shared `GestureScene` in `app/state.py` for all policies. Unknown answers
+  preserve the confirmed gesture. Match only onsets to annotated events; do not
+  treat object-list predictions or request-window coverage as scored gesture
+  detections. Items `3d`/`3e` own matching and scoring; `2e` owns complete grouped splits.
 
 ## Data and measurement integrity
 

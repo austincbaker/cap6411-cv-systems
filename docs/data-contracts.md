@@ -362,7 +362,7 @@ issues = validate_run_dir(run_dir)  # also checks run_id across files and predic
 `tests/fixtures/contracts/` holds one synthetic replay run with numbers chosen
 to be checked by hand. `tests/test_contracts.py` validates every file and
 recomputes the expected values. The gesture prediction examples are synthetic
-contract targets, not evidence that the current app emits gesture events. Their
+contract targets, not measured gesture-detection results. Their
 `{"gesture": label}` observation is the 2c answer format.
 
 - `run_valid/`: a 60 s replay of `pilot-desk-01` at 2 s intervals.
