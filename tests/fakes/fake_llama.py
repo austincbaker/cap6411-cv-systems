@@ -30,7 +30,8 @@ class FakeLlama:
     """Answers /props and /v1/chat/completions after ``latency_s``, cycling through ``outcomes``:
     ok, timeout (read timeout), connect_error, http_error, invalid, empty.
     ``release`` cuts a pending wait short; ``max_active`` records concurrent completions.
-    ``texts``, when given, are the ok responses in order (the last one repeats)."""
+    ``texts``, when given, are the ok responses in order (the last one repeats); otherwise
+    every ok response is the constrained answer ``{"hands": "resting", "gesture": "none"}``."""
 
     def __init__(self, latency_s: float = 0.01, outcomes=("ok",), texts=None) -> None:
         self.latency_s = latency_s
@@ -74,7 +75,7 @@ class FakeLlama:
             if self._texts:
                 text = self._texts.pop(0) if len(self._texts) > 1 else self._texts[0]
             else:
-                text = f"fake description {len(self.completions)}"
+                text = '{"hands": "resting", "gesture": "none"}'
             return httpx.Response(200, json=completion(text))
         finally:
             with self._lock:

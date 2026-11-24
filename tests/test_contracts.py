@@ -10,12 +10,14 @@ import pytest
 
 from contracts import (
     CONTRACT_VERSION,
+    GESTURE_OBSERVATIONS,
     format_cell,
     main,
     read_artifact,
     validate_record,
     validate_run_dir,
 )
+from vlm.prompts import GESTURES, parse_gesture_answer
 
 FIXTURES = Path(__file__).parent / "fixtures" / "contracts"
 RUN = FIXTURES / "run_valid"
@@ -76,6 +78,23 @@ def test_bad_request_records_are_reported_per_line():
     assert "missing field 'frame_id'" in by_line["2"]
     assert "status 'timeout' needs an error" in by_line["3"]
     assert "'prompt_tokens' must be int" in by_line["4"]
+    assert "status 'ok' without a gesture needs an answer_error" in by_line["5"]
+    assert "'gesture' value 'thumbs up' is not one of" in by_line["6"]
+    assert "only an 'ok' request has a gesture or answer_error" in by_line["7"]
+
+
+def test_requests_carry_validated_answers_beside_the_raw_text():
+    requests = load("request", RUN / "requests.jsonl")
+    oks = [r for r in requests if r["status"] == "ok"]
+    assert all(r["gesture"] in GESTURE_OBSERVATIONS or r["answer_error"] for r in oks)
+    assert [(r["text"], r["answer_error"]) for r in oks if r["gesture"] is None] == [
+        ("A desk.", "not_json")
+    ]
+    assert all(r["gesture"] is None and r["answer_error"] is None for r in requests if r not in oks)
+    for r in oks:  # the logged answer is what the app's validation makes of the raw text
+        answer = parse_gesture_answer(r["text"], r.get("finish_reason"))
+        assert (answer.gesture, answer.error) == (r["gesture"], r["answer_error"])
+    assert GESTURE_OBSERVATIONS == set(GESTURES)  # the validator and the app share the vocabulary
 
 
 def test_zero_written_for_a_missing_power_value_is_rejected():
@@ -244,4 +263,4 @@ def test_hand_scored_quality_fixture_uses_selected_gestures():
     assert {row["label"] for row in predictions} == labels
     assert all(row["end_s"] - row["onset_s"] >= 0.5 for row in annotations)
     requests = {row["request_id"]: row for row in load("request", RUN / "requests.jsonl")}
-    assert all(requests[row["request_id"]]["text"] == row["label"] for row in predictions)
+    assert all(requests[row["request_id"]]["gesture"] == row["label"] for row in predictions)

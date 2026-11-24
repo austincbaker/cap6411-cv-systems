@@ -8,6 +8,10 @@ the item 3d event scorer: it looks at requests, not predictions.
 
 The windows CSV has columns label, onset_s, end_s in source seconds; a window is
 [onset_s - tolerance, end_s + tolerance).
+
+An answer names a window's label when the label's pattern matches it. For runs that log the
+validated answer (item 2c, ``gesture`` in requests.jsonl) the pattern is matched against that
+value, so an answer that did not validate never names anything; older runs match the raw text.
 """
 
 from __future__ import annotations
@@ -30,6 +34,13 @@ def read_windows(path: Path) -> list[dict]:
         ]
 
 
+def answer_of(record: dict) -> str:
+    """The validated gesture when the run logs one, else the raw answer text."""
+    if "gesture" in record:
+        return record["gesture"] or ""
+    return record.get("text") or ""
+
+
 def check_run(
     run_dir: Path, windows: list[dict], tolerance_s: float, names: dict[str, re.Pattern]
 ) -> dict:
@@ -46,7 +57,7 @@ def check_run(
         hits = [r for r in ok if lo <= r["source_time_s"] < hi]
         inside.update(r["request_id"] for r in hits)
         pattern = names.get(window["label"])
-        named = [r for r in hits if pattern and pattern.search(r.get("text") or "")]
+        named = [r for r in hits if pattern and pattern.search(answer_of(r))]
         results.append(
             {
                 **window,

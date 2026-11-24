@@ -151,11 +151,14 @@ class VLMClient:
         source_id: str | None = None,
         source_time_s: float | None = None,
         max_tokens: int | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> InferenceResult:
         """Submit fresh image evidence; invalid local inputs raise ValueError.
 
         Times use the host monotonic clock. source_time_s is independent media
         time, not inferred from request completion or elapsed inference time.
+        response_format, when given, is sent as-is (for example a JSON schema the
+        server constrains the answer to); the answer text is returned unparsed.
         """
         if self._closed:
             raise RuntimeError("VLMClient is closed")
@@ -177,6 +180,8 @@ class VLMClient:
         bound = self.config.max_output_tokens if max_tokens is None else max_tokens
         if type(bound) is not int or not 0 < bound <= self.config.max_output_tokens:
             raise ValueError("max_tokens must be positive and within the configured output bound")
+        if response_format is not None and not isinstance(response_format, dict):
+            raise ValueError("response_format must be a JSON object")
 
         payload = {
             "model": self.config.model,
@@ -200,6 +205,8 @@ class VLMClient:
             "stream": False,
             "cache_prompt": False,
         }
+        if response_format is not None:
+            payload["response_format"] = response_format
         started = self._clock()
         common = dict(
             request_id=uuid.uuid4().hex,
