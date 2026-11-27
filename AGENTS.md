@@ -33,9 +33,10 @@
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
   Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`,
-  `src/contracts/`, `src/gates/`, `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
+  `src/contracts/`, `src/gates/`, `src/budget/` (energy-budget controller, items 3a/3c),
+  `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
   Setuptools discovers packages under `src/`; imports are `vlm`, `energy`,
-  `capture`, `contracts` and `gates`, not `src.vlm` etc.
+  `capture`, `contracts`, `gates` and `budget`, not `src.vlm` etc.
   `app/` is not a package under `src/`; run it from the repository root.
   `tests/fixtures/contracts/` holds the item 2d contract fixtures.
   `data/README.md` documents the pilot gestures; `data/annotations/` holds their
@@ -84,8 +85,10 @@ rather than duplicating it once those steps exist.
   the pinned llama.cpp with Metal; `uv run python scripts/energy_suite.py run`
   runs the policy matrix in `configs/energy_suite.json` and
   `uv run python scripts/analyze_energy_suite.py SUITE_DIR` writes its CSVs and
-  figures. See `docs/energy_runbook.md` (powermetrics asks for sudo once; tests
-  use `tests/fakes/fake_powermetrics.py`).
+  figures; `uv run python scripts/energy_suite.py calibrate SUITE_DIR` writes the budget
+  controller's cost table (`budget_costs.json`) from a suite's idle and fixed runs. See
+  `docs/energy_runbook.md` (powermetrics asks for sudo once; tests use
+  `tests/fakes/fake_powermetrics.py`).
 - **Run a focused test:** After setup, run
   `uv run python -m pytest tests/test_inference_client.py -q` or replace the
   filename with the affected test module.

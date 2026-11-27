@@ -359,6 +359,14 @@ logged as `idle_no_call` with the gate's verdict in `detail`. It measures the pi
 base cost (capture, gate and an idle server) for energy comparisons; see
 `docs/energy_runbook.md`.
 
+`--policy budget --budget-wh-per-hour X --interval-s 0.5` keeps the VLM's energy above that
+base cost within X Wh per hour. The gate still decides when something changed; a token-bucket
+controller (`src/budget/`) decides whether to call, and at what image size, using the cost
+table in `--budget-costs` (default `configs/budget_costs.json`, a placeholder until the energy
+suite writes a measured one). A change it cannot afford yet is kept and sent once the bucket
+refills. Every tick's decision, bucket level and estimated spend go to `budget.jsonl`; see
+`docs/energy_runbook.md` for calibration and the suite's budget block.
+
 #### Choosing the gate settings
 
 The defaults were chosen on development clips only: James's `real_thumbs_1`
