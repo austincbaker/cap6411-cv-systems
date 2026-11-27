@@ -1,9 +1,12 @@
 # Always-on VLM assistant — CAP6411
 
-Local image inference and read-only Linux energy telemetry for the always-on VLM project.
-The software for Austin's first two items is implemented here and smoke-checked on the WSL2
-experiment platform; owner review and the unplugged energy go/no-go remain. Webcam capture, event gating, scene-state
-logic, energy-budget admission and final evaluation remain separate team tasks.
+An always-on webcam assistant that sends frames to a compact local vision-language model
+(SmolVLM2 on a CPU llama.cpp server) and uses a cheap change gate to decide which frames are
+worth asking about. Implemented here: local inference, read-only energy telemetry, webcam and
+replay capture, the fixed-interval and gated application, validated gesture answers, gesture
+scene state, the run-file contract and the pilot evaluation scripts. Energy-budget admission
+(3a/3c), the event scorer (3d/3e) and the team-laptop energy trials are not implemented.
+To rerun the pilot comparison, see "Reproduce the main numbers" below.
 
 ## Selected task and evaluation readiness
 
@@ -16,8 +19,6 @@ PR #41 supplies a pilot with 16 events in 10 annotated videos, one session group
 and no assigned splits, plus a documented control clip. Pilot replay and gate
 checks can run now. Complete scored comparisons still require:
 
-- **2c / #9 (Austin and James):** review of the gesture answer format below
-  ("Gesture answers").
 - **3d / #16 and 3e / #17 (James):** one-to-one matching and scoring CLI.
 - **2e / #11 (James):** full dataset, grouped splits and annotation review before
   the 3h evaluation freeze and held-out trials.
@@ -57,6 +58,78 @@ See the [pinned runtime source](https://github.com/ggml-org/llama.cpp/tree/620d2
 and [model artifacts](https://huggingface.co/ggml-org/SmolVLM2-500M-Video-Instruct-GGUF/tree/ccd7aae53bcb1997355c2f094959e72b3642ce17).
 The 256M SmolVLM family remains a fallback candidate; it has not been downloaded or
 validated in this implementation, and requires a separately pinned profile before use.
+
+## Reproduce the main numbers
+
+The main comparison replays the annotated pilot clips through the app twice: fixed
+sampling every 2 s, and the change gate checked every 0.5 s. Both runs ask the same
+question of each frame sent and score answers against the same 14 gesture windows
+(`data/annotations/pilot.csv`: 10 videos, 12 thumbs-ups and 2 peace signs, plus the
+`control` clip with no events). These numbers come from a Mac mini (Apple silicon, CPU
+llama-server, median call about 2.5 s). They are a functional check of quality and call
+counts, and they carry no energy claim:
+
+| Policy | Check interval | VLM calls | Windows named (±1 s) | Windows with a call | False mentions |
+|---|---|---|---|---|---|
+| Fixed | 2 s | 1,348 | 9/14 | 14/14 | 246 |
+| Gated | 0.5 s | 303 | 13/14 | 13/14 | 113 |
+
+"Named" means a call on a frame inside the window (widened by 1 s each side, since the
+labels run about a second off) returned that window's gesture. A false mention is a
+`thumbs_up` or `peace_sign` answer outside every window. Most false mentions come from
+`thumbs_mov_3` and `thumbs_mov_5`, where the model reports gestures that are not there.
+
+1. **Set up** as in [Setup](#setup): `uv sync --extra dev`, then
+   `uv run python scripts/llama_runtime.py prepare`.
+2. **Get the clips.** The videos are personal data and are not in git. Download them from
+   the team Drive folder linked in [data/README.md](data/README.md) into `data/videos/`
+   (git-ignored), named by `video_id`: `recording_1_thumbs.mov` to `recording_4_peace.mov`,
+   `control.mov` and `thumbs_mov_1.mov` to `thumbs_mov_5.mov`. `thumbs_mov_6` is left out:
+   the Drive copy is the same file as `thumbs_mov_3`.
+3. **Start one model server** in its own terminal and leave it running:
+
+   ```bash
+   uv run python scripts/llama_runtime.py serve
+   ```
+
+4. **Replay the clips**, one policy after the other (each pass replays about 1.5 hours of
+   video in real time):
+
+   ```bash
+   uv run python scripts/run_pilot_eval.py --policy fixed --interval-s 2 --out runs/pilot
+   uv run python scripts/run_pilot_eval.py --policy gated --interval-s 0.5 --out runs/pilot
+   ```
+
+   Each clip becomes `runs/pilot/<video_id>-<policy>/`, with its log in `runs/pilot/logs/`.
+   A run that already has a manifest is skipped, so an interrupted pass resumes where it
+   stopped. `--interval-s` is required: the gate's defaults are tuned for 0.5 s checks,
+   while the app's own default is 2 s. Use `--clips recording_1_thumbs --duration-s 15`
+   for a quick check.
+
+5. **Score** every run against the annotations:
+
+   ```bash
+   uv run python scripts/score_pilot_eval.py runs/pilot
+   ```
+
+   This writes `runs/pilot/quality.csv` (one row per run) and prints the totals per
+   policy, which should match the table above. It builds on `scripts/gate_check.py`,
+   which also checks one clip's runs at a time:
+
+   ```bash
+   grep ',thumbs_mov_1,' data/annotations/pilot.csv \
+     | awk -F, 'BEGIN{print "label,onset_s,end_s"}{print $4","$5","$6}' > thumbs_mov_1.windows.csv
+   uv run python scripts/gate_check.py runs/pilot/thumbs_mov_1-fixed runs/pilot/thumbs_mov_1-gated \
+       --windows thumbs_mov_1.windows.csv --tolerance-s 1 \
+       --name thumbs_up=thumb --name peace_sign="peace|v-sign|victory"
+   ```
+
+Calls are serialized and a tick that arrives while a call is running is skipped, so call
+counts depend on how fast the machine answers: with calls of about 2.5 s, fixed 2 s
+sampling sends every other tick. Run one server and one pass at a time, and check the
+median call time each run prints; a run slowed by other load (median above 5 s is
+flagged) should be deleted and rerun. Scoring needs runs that log validated answers
+(`gesture` in `requests.jsonl`, item 2c).
 
 ## Run local inference
 
@@ -175,7 +248,7 @@ sensor access is required. Live validation and its limitations are recorded in
 `docs/examples/`. Model weights, builds and full run artifacts remain ignored locally.
 
 The [implementation index](energy-aware-vlm-implementation/README.md) links the team
-tasks and their GitHub issues. No webcam/event-detection implementation is included yet.
+tasks and their GitHub issues.
 
 ## Capture and baseline
 
@@ -283,8 +356,9 @@ settings, and `counts` has one entry per reason.
 #### Choosing the gate settings
 
 The defaults were chosen on development clips only: James's `real_thumbs_1`
-(9.7 min, two thumbs-ups) and his four short gesture clips plus a control.
-`real_thumbs_2` (8.8 min, one annotated thumbs-up) was held out and checked
+(9.7 min, two thumbs-ups; `thumbs_mov_1` in `data/annotations/pilot.csv`) and his
+four short gesture clips plus a control. `real_thumbs_2` (8.8 min, `thumbs_mov_2`;
+one thumbs-up was annotated when it was checked) was held out and checked
 once with the chosen setting. On `real_thumbs_1`, ordinary movement scores
 0.02 (median) to 0.40 (99th percentile) and a thumbs-up peaks at 0.68 to
 0.75. The old default (threshold 0.05, no persistence) fired on head movement
