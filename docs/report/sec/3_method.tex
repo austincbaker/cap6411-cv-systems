@@ -1,0 +1,112 @@
+% Owners: Alejandro drafted 3.1 to 3.5 (items 2a, 2b, 2c, 1d, 3c; app/, src/gates/, src/vlm/prompts.py).
+% Austin owns 3.6 (inference and telemetry, items 1a and 1b; src/vlm/, src/energy/) and reviews
+% the architecture as a whole (4e plan). Every number below is traced in a comment to its source.
+\section{Method}
+\label{sec:method}
+
+\input{fig/pipeline}
+
+The assistant watches one camera and reports when a person starts or stops showing a thumbs-up or a peace sign.
+Figure~\ref{fig:pipeline} shows the pipeline.
+A capture thread keeps only the newest frame, a scheduler decides at regular checks whether that frame goes to the vision-language model (VLM), the model's answer is constrained to a fixed format and validated, and a scene state turns the stream of validated answers into gesture events.
+The fixed-interval baseline and the gated policy share every stage except the gate, so any difference between them comes from which frames are sent.
+
+\subsection{Capture and scheduling}
+\label{sec:schedule}
+% Source: app/main.py module docstring and _main_loop.
+Capture runs on its own thread and overwrites a single slot with each new frame, so slow inference never stalls capture and no backlog of stale frames builds up.
+The scheduler wakes at checks $t_k = t_0 + k\Delta$ on the monotonic clock, so checks do not drift when one runs late.
+At each check it takes the newest frame and applies three rules in order.
+If a request is still in flight, the check is skipped and logged as busy; nothing is queued.
+If an earlier request timed out, the scheduler waits until the server reports no busy slot before sending again.
+Otherwise the frame is sent under the fixed-interval policy, or passed to the change gate under the gated policy.
+At most one request is in flight at any time.
+Every skipped check is written to the run's drop log with its reason, so the logs account for every check.
+
+\subsection{Change gate}
+\label{sec:gate}
+% Source: src/gates/change.py (GateConfig defaults and ChangeGate.decide/acknowledge).
+The gate compares the candidate frame with a \emph{reference}: the last frame actually sent to the VLM.
+Comparing against the last sent frame, instead of the previous frame, lets a change that builds up slowly keep growing until it triggers.
+
+\paragraph{Change score.}
+Each frame is converted to grayscale, resized to $160\times120$, blurred with a $5\times5$ Gaussian kernel, and its mean brightness is subtracted, so a uniform lighting shift does not count as change.
+For a preprocessed frame $f$ and reference $r$, a pixel $p$ is changed when $|f(p)-r(p)| > \delta$, with $\delta=25$ on the 0 to 255 brightness scale.
+The image is divided into a $4\times4$ grid of cells $C_j$, and the score is the changed fraction of the most-changed cell,
+\begin{equation}
+  s = \max_j \frac{1}{|C_j|}\sum_{p\in C_j} \mathbb{1}\big[\,|f(p)-r(p)|>\delta\,\big].
+  \label{eq:score}
+\end{equation}
+Taking the maximum over cells keeps a hand raised in one part of the frame from being diluted by the static remainder.
+The whole-frame changed fraction is logged beside $s$ for diagnosis.
+
+\paragraph{Decision.}
+A change starts when $s \ge \tau$ and must stay above $\tau$ for $k$ consecutive checks before it triggers a call; a score below $\tau$ resets the count.
+After a trigger, further triggers are held back for a cooldown $T_{\min}$.
+In order, the gate (1) triggers when it has no reference yet, (2) skips when $s<\tau$, (3) skips while the change has lasted fewer than $k$ checks, (4) skips within $T_{\min}$ of the last trigger, and (5) otherwise triggers.
+When a triggered frame is sent, it becomes the new reference, the cooldown clock restarts and the persistence count resets.
+The gate is consulted only when no request is in flight, so every trigger is sent, and a busy check neither advances nor resets the count.
+The implementation also supports a periodic forced refresh and a lower release threshold (hysteresis); both are off by default.
+
+\paragraph{Settings.}
+% Source: GateConfig defaults; README "Choosing the gate settings" for the tuning evidence.
+We use $\tau=0.3$, $k=3$ and $T_{\min}=2$\,s with checks every $\Delta=0.5$\,s, so a change must be present at three checks spanning 1\,s before it is sent.
+These values were chosen on development clips.
+On \texttt{real\_thumbs\_1}, ordinary movement scores 0.02 (median) to 0.40 (99th percentile), while a thumbs-up peaks at 0.68 to 0.75.
+An earlier setting ($\tau=0.05$ without persistence) fired on head movement and made more calls than fixed 2\,s sampling.
+With $\tau=0.3$ and $k=3$, a replay that models each call as 2.5\,s of busy time caught both gestures on \texttt{real\_thumbs\_1} with 27 calls against 147 for fixed 2\,s sampling, 82\% fewer.
+A threshold of 0.4 cut calls further but left less margin under the gesture scores, and hysteresis only added calls on these clips.
+Because $k$ counts checks, these settings are tied to $\Delta=0.5$\,s and must be retuned for another check interval.
+
+\subsection{Validated answer format}
+\label{sec:answers}
+% Source: src/vlm/prompts.py (GESTURE_PROMPT, GESTURE_SCHEMA, parse_gesture_answer, ANSWER_ERRORS);
+% configs/inference.json (max_output_tokens 64).
+Every request asks the same question about one frame: \emph{``Describe what the person's hands are doing in a few words, then say whether the person is making a thumbs up, a peace sign, or neither (none).''}
+The request carries a JSON schema that llama-server compiles into a decoding grammar, so a compliant server can only return an object with two fields in a fixed order: \texttt{hands}, a free description of at most 80 characters, then \texttt{gesture}, one of \texttt{thumbs\_up}, \texttt{peace\_sign} or \texttt{none}.
+The \texttt{hands} field comes first because SmolVLM2 asked for the gesture alone answered \texttt{thumbs\_up} on every frame; writing a short description first gives the model a step in which to look before it commits to a label.
+Only \texttt{gesture} is used as the observation.
+
+The application validates every answer exactly, without normalizing or guessing, because the constraint can fail: a server may ignore the schema, or the 64-token output bound may cut an answer short.
+An answer that fails validation is recorded with one of seven reasons (truncated, not JSON, not an object, missing field, unexpected fields, non-text description, gesture outside the vocabulary) and is treated as \emph{unknown}.
+An unknown answer is never read as \texttt{none}: \texttt{none} is a positive statement that neither gesture is visible, while an unknown answer carries no information.
+Transport status (whether the server answered) is logged separately from answer validity.
+
+\subsection{Gesture scene state}
+\label{sec:scene}
+% Source: app/state.py (GestureScene.update, Evidence.available_source_time_s).
+The scene state holds one confirmed gesture, starting at \texttt{none}, and updates once per request.
+A validated answer equal to the confirmed gesture changes nothing, so a held gesture is reported once.
+A different validated answer confirms a change after $c$ consecutive answers agree ($c=1$ by default): leaving a gesture emits an \emph{offset}, entering one emits an \emph{onset}, and a direct switch between the two gestures emits both from the same answer.
+Returning to \texttt{none} rearms the state, so the same gesture shown again is a new onset.
+Unknown answers (failed requests or invalid answers) change nothing: the confirmed gesture stays, and a change awaiting confirmation neither advances nor resets.
+The state also counts unknown answers since the last valid one, which the display shows as staleness.
+
+Each event keeps the request it came from, with the frame's source time and the time the answer became available.
+The event time used for scoring is the availability time mapped onto the source timeline,
+$t_{\text{avail}} = t_{\text{src}} + (t_{\text{resp}} - t_{\text{cap}})$,
+where $t_{\text{src}}$ is the frame's media time, $t_{\text{cap}}$ its host capture time and $t_{\text{resp}}$ the host time the answer arrived.
+Response delay therefore includes the time the frame waited to be sent and the inference time, and does not credit an answer with the moment its frame was captured.
+Both policies feed the same scene state, so fixed and gated runs share one event derivation.
+
+\subsection{Run records}
+\label{sec:records}
+% Source: app/main.py module docstring; docs/data-contracts.md (item 2d); src/contracts/.
+Each run writes a new directory with a request log (one line per call, with frame identity, source time, request and response times, transport status, validated gesture or answer error), a drop log (every skipped check and every frame the source dropped, with its reason and gate score), the derived gesture events, power samples and a manifest of the configuration and platform.
+The formats follow the project's versioned file contract, and a validator checks every run directory, so the evaluation tools read files and never application internals.
+Unavailable power, token or timing values are recorded as missing, never as zero.
+
+\subsection{Inference and telemetry}
+\label{sec:inference}
+% Owner: Austin (items 1a, 1b). Alejandro: facts below are from configs/inference.json and
+% docs/1b-battery-qualification.md; Austin turns them into prose and checks them.
+\TODO{Inference and telemetry prose: Austin.}
+\begin{notes}{Austin}
+\begin{itemize}\setlength\itemsep{0pt}
+\item Model: SmolVLM2-500M-Video-Instruct, Q8\_0 GGUF with its Q8\_0 projector (\texttt{ggml-org/SmolVLM2-500M-Video-Instruct-GGUF}, pinned revision and SHA-256 in \texttt{configs/inference.json}).
+\item Runtime: one persistent llama-server from llama.cpp~\cite{llamacpp} revision 620d222, CPU only, 4 threads, context 4096, output bound 64 tokens, 120\,s read timeout, localhost port 8080.
+\item Client: \texttt{src/vlm/client.py}; failed requests are logged, never retried silently. Frames sent as JPEG at quality 85 (\texttt{app/main.py}).
+\item Team-laptop smoke check (1a, \texttt{docs/validation-1a-1b.md}): mean request latency 2.48\,s under WSL2 on CPU.
+\item Telemetry (1b): whole-laptop battery energy from Windows \texttt{BatteryReport} read from WSL2; WSL sysfs scale is unqualified and RAPL is absent, so package energy is unavailable. Details in Sec.~\ref{sec:setup}.
+\end{itemize}
+\end{notes}

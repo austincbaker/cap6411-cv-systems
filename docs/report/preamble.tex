@@ -1,0 +1,87 @@
+%% This file contains a number of tweaks that are typically applied to the main document.
+%% They are not enabled by default, but can be enabled by uncommenting the relevant lines.
+
+
+%%
+%% Official support for 2-column teaser figure
+%%
+\usepackage{cuted} %< for strip environment
+
+%%
+%% For auto-referencing of figures (see fig/teaser.tex and \label{} therein)
+%%
+\usepackage{currfile} %< for \currfilebase macro
+
+%%
+%% caption and (global) spacing overrides
+%%
+\usepackage{caption} %< for "\captionof" commands (teaser)
+% \setlength{\abovecaptionskip}{.5em} % space above caption
+% \setlength{\belowcaptionskip}{1em} % space below caption
+
+%%
+%% Inline annotations; for predefined colors, refer to "dvipsnames" in the xcolor package:
+%% https://tinyurl.com/overleaf-colors
+%%
+\newcommand{\red}[1]{{\color{red}#1}}
+\newcommand{\todo}[1]{{\color{red}#1}}
+\newcommand{\TODO}[1]{\textbf{\color{red}[TODO: #1]}}
+%%
+%% Disable for camera ready / submission by uncommenting these lines:
+%%
+% \renewcommand{\TODO}[1]{}
+% \renewcommand{\todo}[1]{#1}
+
+%%
+%% Work harder in optimizing text layout. Typically shrinks text by 1/6 of page, enable
+%% it at the very end of the writing process, when you are just above the page limit.
+%%
+% \usepackage{microtype}
+
+%%
+%% Fine-tune paragraph spacing.
+%%
+% \renewcommand{\paragraph}[1]{\vspace{.5em}\noindent\textbf{#1.}}
+
+%%
+%% Globally adjusts space between figure and caption.
+%%
+% \setlength{\abovecaptionskip}{.5em}
+
+%%
+%% Allows "the use of \paper to refer to the project name"
+%% with automatic management of space at the end of the word.
+%%
+% \usepackage{xspace}
+% \newcommand{\paper}{ProjectName\xspace}
+
+%%
+%% Commonly used math definitions.
+%%
+% \DeclareMathOperator*{\argmin}{arg\,min}
+% \DeclareMathOperator*{\argmax}{arg\,max}
+
+%%
+%% Tighten underline.
+%%
+% \usepackage{soul}
+% \setuldepth{foobar}
+
+%%
+%% Fix misplaced line numbers with lineno v5.7/v5.8 (Feb 2026, e.g. early TeX Live 2026 installs).
+%% These versions write the column tag outside the column box, so line numbers end up on the
+%% wrong side of the column. This backports the fix from lineno v5.9 and does nothing for other
+%% lineno versions or in camera-ready mode. Updating TeX Live (tlmgr update --all) also fixes it.
+%%
+\makeatletter
+\@ifpackageloaded{lineno}{\ifdefined\IfFormatAtLeastTF\IfFormatAtLeastTF{2025-06-01}{%
+  \@ifpackagelater{lineno}{2026/03/08}{}{\@ifpackagelater{lineno}{2026/02/16}{%
+    \RemoveFromHook{build/column/before}[lineno]%
+    \AddToHook{build/column/after}{%
+      \setbox\@outputbox\vbox to\ht\@outputbox{%
+        \boxmaxdepth\@maxdepth
+        \protected@write\@auxout{}{%
+          \string\def\string\@LN@column{\if@firstcolumn1\else2\fi}}%
+        \unvbox\@outputbox}}%
+  }{}}}{}\fi}{}
+\makeatother

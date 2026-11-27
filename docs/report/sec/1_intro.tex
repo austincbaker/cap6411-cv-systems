@@ -1,0 +1,13 @@
+% Owner: James and Shawn (4e plan). Austin and Alejandro review the system description.
+\section{Introduction}
+\label{sec:intro}
+\TODO{Introduction prose: James and Shawn.}
+\begin{notes}{James and Shawn}
+\begin{itemize}\setlength\itemsep{0pt}
+\item Primary research question (\texttt{docs/methodology.md}): can runtime scheduling reduce the energy of an always-on, on-device VLM assistant while keeping useful event quality and acceptable response delay?
+\item Supplementary questions there: event-driven versus fixed-interval energy; quality and delay retained under selective calls; operating within an energy budget. The last one was not built (Sec.~\ref{sec:future}); say so here.
+\item Framing from the methodology doc: compact VLMs make each call cheaper; this project asks whether a call is needed at all. Savings are an outcome to measure, not an assumption.
+\item Contributions to list (check against what is in the final results): (1) a persistent local CPU inference stack with pinned model and runtime (1a); (2) qualified whole-laptop battery telemetry under WSL2 (1b); (3) a change gate, validated answer format and shared gesture event derivation (2a, 2c, 2b); (4) versioned file contracts and validators (2d); (5) the pilot gesture dataset (1e, 2e).
+\item Platform: Ubuntu 22.04.5 under WSL2 on the team laptop, CPU only.
+\end{itemize}
+\end{notes}

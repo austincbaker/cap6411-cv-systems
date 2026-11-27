@@ -1,0 +1,93 @@
+% Owners: Shawn (analysis, 3g, 4d) and James (event scoring, 4a) for the section as a whole.
+% Alejandro drafted 5.1 (functional check) and the two energy options in 5.2; he picks one.
+\section{Results}
+\label{sec:results}
+
+\subsection{Functional check on the pilot clips}
+\label{sec:pilot}
+% Source: docs/report/data/pilot-2026-11-18.csv (rows whose windows_from equals clip).
+% Runs: Mac mini, one llama-server, real-time replays one at a time, 18 Nov 2026,
+% fixed --interval-s 2, gated --policy gated --interval-s 0.5, gate defaults.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lc rr rr rr@{}}
+\toprule
+ & & \multicolumn{2}{c}{Calls} & \multicolumn{2}{c}{Named} & \multicolumn{2}{c}{False mentions} \\
+\cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(l){7-8}
+Clip & Win. & Fixed & Gated & Fixed & Gated & Fixed & Gated \\
+\midrule
+recording\_1\_thumbs & 1 & 4 & 3 & 1 & 1 & 0/2 & 0/2 \\
+recording\_2\_thumbs & 1 & 3 & 3 & 0 & 1 & 0/2 & 0/2 \\
+recording\_3\_peace  & 1 & 3 & 3 & 0 & 1 & 0/1 & 0/2 \\
+recording\_4\_peace  & 1 & 3 & 3 & 1 & 1 & 0/2 & 0/2 \\
+control             & 0 & 3 & 1 & -- & -- & 0/3 & 0/1 \\
+real\_thumbs\_1     & 2 & 147 & 25 & 2 & 2 & 1/143 & 0/21 \\
+real\_thumbs\_2     & 2 & 133 & 26 & 1 & 1 & 7/128 & 9/24 \\
+thumbs\_mov\_3      & 2 & 336 & 106 & 2 & 2 & 91/330 & 52/101 \\
+thumbs\_mov\_4      & 2 & 363 & 39 & 1 & 2 & 7/361 & 3/36 \\
+thumbs\_mov\_5      & 2 & 353 & 94 & 1 & 2 & 140/350 & 49/90 \\
+\midrule
+All 10 clips        & 14 & 1,348 & 303 & 9 & 13 & 246/1,322 & 113/281 \\
+\bottomrule
+\end{tabular}}
+\caption{\textbf{Mac mini, functional check} (no energy measured). Fixed sampling checks every 2\,s; the gated policy checks every 0.5\,s with $\tau{=}0.3$, $k{=}3$, $T_{\min}{=}2$\,s. \emph{Win.}: annotated gesture windows. \emph{Named}: windows in which an answer gave the window's gesture. \emph{False mentions}: gesture answers among the calls made outside every window. Scored at $\pm1$\,s.}
+\label{tab:pilot}
+\end{table}
+
+Table~\ref{tab:pilot} compares the two policies on the ten pilot clips, about 90 minutes of video replayed in real time on a Mac mini.
+These runs check that the pipeline behaves as designed; they are not energy results, and the clips include those used to choose the gate settings.
+Over all clips the gated policy made 303 calls against 1,348 for fixed sampling, 78\% fewer, and named 13 of the 14 gesture windows against 9.
+% 303/1348 = 0.225. Named: windows_named column.
+Every one of the 1,651 answers validated against the schema.
+% answers_invalid is 0 in every row; 1,348 + 303 = 1,651.
+
+Fixed sampling at 2\,s did not achieve a 2\,s rate.
+The median call took 2.5\,s, longer than the interval, so nearly every other check found a request in flight: the fixed runs skipped 1,342 checks as busy against 1,348 calls, which spaces calls about 4\,s apart.
+% busy_skips column, fixed rows: 1,342; median_call_s about 2.5 in every row.
+Both policies placed at least one call in every window except one; the fixed policy's five misses are windows where its few calls returned \texttt{none} or the wrong gesture.
+% windows_caught: fixed 14 of 14, gated 13 of 14; wrong_gesture_in_window: fixed 3.
+The gated policy waits for a change to persist for 1\,s and then sends a frame in which the gesture has settled, which is consistent with it naming more windows with fewer calls.
+Its one miss is the first window of \texttt{real\_thumbs\_2}, where the annotation appears to be placed about a minute early; neither policy names it.
+\TODO{Alejandro: keep or drop the annotation remark; with that window moved one minute later both policies catch it (gated 14 of 14, fixed 10 of 14), see the CSV row real\_thumbs\_2\_minutefix.}
+
+For windows that were named, the median delay from gesture onset to the naming answer's availability was 4.06\,s for the gated policy (13 windows) and 4.61\,s for fixed sampling (9 windows).
+% Pooled delays_s column over the ten clips.
+Most of the gated delay is the 1\,s persistence wait and one call of about 2.5\,s; the gate can start counting while the hand is still rising, before the annotated onset, so some delays are shorter than that sum.
+
+The gated policy did not reduce false mentions in proportion to calls.
+It made 113 false mentions in 281 calls outside gesture windows (40\%) against 246 in 1,322 for fixed sampling (19\%).
+Gated calls happen when something moves, and movement is when the model is most easily misled, so the gate concentrates calls on the frames the model finds hardest.
+Most false mentions come from two clips, \texttt{thumbs\_mov\_3} and \texttt{thumbs\_mov\_5} (Sec.~\ref{sec:limitations}); on the other eight clips they total 15 for fixed and 12 for gated.
+% Fixed: 1+7+7 = 15; gated: 9+3 = 12 (false_mentions_outside column).
+Each false mention that differs from the confirmed gesture becomes an onset, so the scene state wrote 167 onsets in the fixed runs and 85 in the gated runs, against 14 annotated gestures.
+% app_onsets column.
+
+\TODO{James and Shawn: held-out event quality (4a) if any is run; otherwise state that the pilot clips are the only quality evidence.}
+
+\subsection{Energy}
+\label{sec:energy}
+% Alejandro picks option A or B; delete the other. Owner of the final text: Shawn (3g, 4d) with Austin.
+\begin{tcolorbox}[colback=red!4,colframe=red!60!black,boxrule=0.5pt,fonttitle=\footnotesize\bfseries,title={Placeholder: Alejandro picks option A or B and deletes the other},fontupper=\small]
+\textbf{Option A: team-laptop battery runs.}
+We replayed \TODO{clips} on the team laptop under WSL2 on battery power, once per policy and \TODO{N} times each, reading whole-laptop energy from the qualified Windows battery report.
+Fixed sampling used \TODO{X}\,Wh over \TODO{T}\,min and the gated policy \TODO{Y}\,Wh, a difference of \TODO{D}\% (\TODO{spread across repeats}).
+An idle run with the model loaded and no calls used \TODO{I}\,Wh over the same time, so the incremental energy of inference was \TODO{X$-$I} and \TODO{Y$-$I}\,Wh.
+These are whole-laptop figures; package energy is unavailable under WSL2.
+
+\medskip
+\textbf{Option B: estimate from call counts (energy not measured end to end).}
+We did not measure either policy's energy on the team laptop.
+The qualified battery source reports whole-laptop energy in steps of about 0.39\,Wh every 30 to 40\,s, which cannot resolve single calls, and in its qualification run it reported 41.2\,W idle and 37.4\,W under a four-worker CPU load, so it did not register a CPU load of that size.
+We therefore estimate from call counts and label the result as an estimate.
+On the pilot replays the gated policy made 303 calls against 1,348.
+At the median call time of 2.5\,s, the model was busy for about 760\,s under the gated policy and 3,370\,s under fixed sampling, out of about 5,380\,s of video.
+At the laptop's reported 41.2\,W idle draw, the whole session costs about 62\,Wh under either policy, so the saving is the incremental inference power $\Delta P$ times the 2,610\,s of busy time avoided: about 0.73\,Wh for each watt of $\Delta P$.
+We did not measure $\Delta P$, so this bounds the saving by a quantity we could not observe; the call reduction itself (78\%) is the measured result.
+% 303*2.5 = 757.5 s; 1348*2.5 = 3370 s; replay length = (1348+1342)*2 s = 5380 s;
+% 41.2 W * 5380 s = 61.6 Wh; (3370-757.5) s = 2612.5 s = 0.726 h. Call time is the Mac mini's;
+% the team laptop's 1a smoke check measured a 2.48 s mean, close to it.
+\end{tcolorbox}

@@ -1,0 +1,20 @@
+% Owners: James and Shawn (4e plan). Alejandro drafted the false-mention and gate paragraphs.
+\section{Limitations}
+\label{sec:limitations}
+
+\paragraph{False gesture mentions.}
+% Source: docs/report/data/pilot-2026-11-18.csv, rows thumbs_mov_3 and thumbs_mov_5
+% (false_mentions_outside, answers_thumbs_up, answers_peace_sign, outside_calls).
+On two long clips the model often named a gesture that was not there.
+On \texttt{thumbs\_mov\_3} it did so in 91 of 330 calls outside gesture windows under fixed sampling and 52 of 101 under the gated policy; on \texttt{thumbs\_mov\_5}, in 140 of 350 and 49 of 90.
+On \texttt{thumbs\_mov\_5} with fixed sampling it answered \texttt{peace\_sign} 106 times, though the clip contains only thumbs-ups.
+These two clips account for 231 of the 246 fixed false mentions and 101 of the 113 gated ones.
+The scene state cannot easily filter them at our call rates: under fixed sampling calls arrive about 4\,s apart, so requiring two agreeing answers before an onset would add about 4\,s of delay and drop any gesture held for less than two calls.
+We kept SmolVLM2-500M for every result; whether a larger model reduces false mentions at acceptable latency and energy is untested.
+
+\paragraph{Gate.}
+The gate settings were chosen on clips that also appear in Table~\ref{tab:pilot}, so the table is not a held-out estimate.
+The gate responds to any localized change that persists, so a person who moves steadily in one region sends calls as readily as one who gestures, and a switch from one gesture to the other in the same place changes few pixels and may not trigger.
+Its persistence count is defined in checks, so its timing depends on the check interval.
+
+\TODO{James and Shawn: data limitations (one session, one person, 16 events, no grouped split, annotation offset of about 1\,s); Mac mini versus team laptop; energy source granularity; scorer is window-based (no one-to-one matcher).}
