@@ -591,6 +591,21 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
     return written
 
 
+def _reference_lines(ax, references: dict, key: str) -> list[float]:
+    """Mean ``key`` of each reference condition as a labelled horizontal line; conditions at
+    the same level share one line and one label."""
+    levels: dict[float, list[str]] = {}
+    for name, members in references.items():
+        values = [m[key] for m in members if m[key] is not None]
+        if values:
+            levels.setdefault(round(statistics.mean(values), 9), []).append(name.replace("_", " "))
+    for level, names in levels.items():
+        ax.axhline(level, color=MUTED, linewidth=0.8, zorder=0)
+        ax.annotate(" and ".join(names), (0, level), xytext=(2, 3), textcoords="offset points",
+                    fontsize=7, color=MUTED)  # fmt: skip
+    return list(levels)
+
+
 def budget_figures(
     budget: list[dict], rows: list[dict], domain: Optional[str], suite: Path, out: Path
 ) -> list[Path]:
@@ -634,21 +649,13 @@ def budget_figures(
     ]
     if estimated:
         ax.plot(*zip(*estimated), "x", color=TEXT, markersize=6, label="controller estimate")
-    reference_levels = []
-    for name, members in references.items():
-        values = [m["incremental_w"] for m in members if m["incremental_w"] is not None]
-        if values:
-            level = statistics.mean(values)
-            reference_levels.append(level)
-            ax.axhline(level, color=MUTED, linewidth=0.8)
-            ax.annotate(name.replace("_", " "), (0, level), xytext=(2, 3), textcoords="offset points",
-                        fontsize=7, color=MUTED)  # fmt: skip
+    reference_levels = _reference_lines(ax, references, "incremental_w")
     ax.set_xlim(0, top)
     ax.set_ylim(0, max([top] + [level * 1.1 for level in reference_levels]))
     ax.set_xlabel("budget, Wh per hour above idle", fontsize=8, color=TEXT)
     label = DOMAIN_LABEL.get(domain, "energy unavailable")
     ax.set_ylabel(f"VLM energy above idle, Wh per hour\n({label})", fontsize=8, color=TEXT)
-    ax.legend(frameon=False, fontsize=7, labelcolor=TEXT, loc="lower right")
+    ax.legend(frameon=False, fontsize=7, labelcolor=TEXT, loc="center left")
     ax.set_title(f"Spend vs budget, {suite.name}", fontsize=9, color=TEXT, loc="left")
 
     ax = axes[1]
@@ -660,12 +667,7 @@ def budget_figures(
     if named:
         ax.plot(*zip(*named), "o-", color=color, markersize=7, markeredgecolor="white",
                 markeredgewidth=1.5)  # fmt: skip
-    for name, members in references.items():
-        values = [m["named_fraction"] for m in members if m["named_fraction"] is not None]
-        if values:
-            ax.axhline(statistics.mean(values), color=MUTED, linewidth=0.8)
-            ax.annotate(name.replace("_", " "), (0, statistics.mean(values)), xytext=(2, 3),
-                        textcoords="offset points", fontsize=7, color=MUTED)  # fmt: skip
+    _reference_lines(ax, references, "named_fraction")
     ax.set_xlim(0, top)
     ax.set_ylim(0, 1.05)
     ax.set_xlabel("budget, Wh per hour above idle", fontsize=8, color=TEXT)
