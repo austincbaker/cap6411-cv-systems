@@ -298,13 +298,25 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
                 plt.Line2D([], [], marker="s", linestyle="", color=BLOCK_COLOR[b], label=b)
                 for b in blocks
             ]
-            ax.legend(handles=handles, frameon=False, fontsize=8, labelcolor=TEXT)
+            ax.legend(
+                handles=handles,
+                frameon=False,
+                fontsize=8,
+                labelcolor=TEXT,
+                loc="upper left",
+                bbox_to_anchor=(1.02, 1.0),
+            )
 
     # Quality vs energy: one point per non-idle condition, whiskers = min..max across reps.
     fig, ax = plt.subplots(figsize=(6.0, 4.0), dpi=200)
     _axes_style(ax)
     idle = [s for s in order if s["policy"] == "idle"]
-    for s in order:
+    plotted = sorted(
+        (s for s in order if s["energy_wh_per_hour_mean"] is not None),
+        key=lambda s: s["energy_wh_per_hour_mean"],
+    )
+    x_max = max((s["energy_wh_per_hour_mean"] for s in plotted), default=0.0)
+    for rank, s in enumerate(plotted):
         if (
             s["policy"] == "idle"
             or s["energy_wh_per_hour_mean"] is None
@@ -329,11 +341,13 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
             markeredgecolor="white",
             markeredgewidth=1.5,
         )
+        right = x > 0.75 * x_max  # label points near the right edge on their left
         ax.annotate(
             s["condition"],
             (x, y),
-            xytext=(6, 4),
+            xytext=(-6 if right else 6, 6 if rank % 2 else -12),  # alternate above/below
             textcoords="offset points",
+            ha="right" if right else "left",
             fontsize=7,
             color=TEXT,
         )
@@ -399,6 +413,7 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
                 color=TEXT,
             )
         ax.invert_yaxis()
+        ax.margins(x=0.18)
         ax.set_xlabel(f"Wh per hour ({DOMAIN_LABEL[panel]})", fontsize=8, color=TEXT)
     axes[0][0].set_title(f"Energy per hour, {title}", fontsize=9, color=TEXT, loc="left")
     legend(axes[0][-1])
@@ -454,6 +469,7 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
     axes[1].set_xlabel("call latency, s (bar median, tick p90)", fontsize=8, color=TEXT)
     for ax in axes:
         ax.invert_yaxis()
+        ax.margins(x=0.3)
     axes[0].set_title(f"Calls and latency, {title}", fontsize=9, color=TEXT, loc="left")
     fig.tight_layout()
     path = out / "calls_latency.png"
