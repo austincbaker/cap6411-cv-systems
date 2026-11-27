@@ -56,7 +56,7 @@ for 5+ seconds helps pilot sampling and does not redefine the event vocabulary.
 Occlusion or an uncertain model answer must not be silently treated as a confirmed
 negative. Answers are validated against `thumbs_up`, `peace_sign` and `none` (2c,
 `gesture` in `requests.jsonl`), and every policy derives gesture onsets and offsets
-from them with the same rules (2b, README "Gesture scene state"): a failed or
+from them with the same rules (2b, `docs/app.md` "Gesture scene state"): a failed or
 invalid answer keeps the confirmed gesture, and a gesture after an answer of `none`
 is a new onset.
 

@@ -52,7 +52,7 @@ SKIP_REASONS = ("gate_no_change", "gate_persisting", "gate_cooldown")
 
 @dataclass(frozen=True)
 class GateConfig:
-    # threshold, persist_checks and min_interval_s were chosen on development clips (README,
+    # threshold, persist_checks and min_interval_s were chosen on development clips (docs/app.md,
     # "Choosing the gate settings") for 0.5 s gate checks; retune for another check interval.
     threshold: float = 0.3  # changed fraction of the most-changed cell that starts a change
     pixel_delta: int = 25  # brightness change (0-255) that marks a pixel as changed

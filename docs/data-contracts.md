@@ -78,7 +78,7 @@ uv run python -m app.main --source replay --video PATH --interval-s N \
     --duration-s N --run-dir NEW_DIR --no-display [--profile configs/inference.json]
 ```
 
-The README's "Capture and baseline" section lists every flag. The contract
+`docs/app.md` ("Running the app") lists every flag. The contract
 part is:
 
 - **Inputs:** `--profile` (inference config), `--source replay --video PATH`

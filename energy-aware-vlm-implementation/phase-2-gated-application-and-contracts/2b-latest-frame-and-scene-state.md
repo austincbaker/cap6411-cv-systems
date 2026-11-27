@@ -54,6 +54,6 @@ The stub is considered complete when every row below shows 🟢.
 | 2 | Update confirmed observations only from successful validated inference and suppress repeated unchanged notices. | [Tasks](#tasks) | Invalid responses leave the previous confirmed state intact. | app/state.py:80, tests/test_scene.py:36, tests/test_scene.py:61, tests/test_scene.py:144 (unknown answers keep the confirmed gesture; a held gesture is one onset) | 🟢 |
 | 3 | Add clean stop behavior and tests for slow requests, cooldown and refresh interactions. | [Tasks](#tasks) | Slow inference does not replay a stale backlog after it finishes. | tests/test_app_baseline.py:137, tests/test_app_baseline.py:295, tests/test_gate.py:79, tests/test_gate.py:87, tests/test_gate.py:95 | 🟢 |
 | 4 | Derive predicted events by normalizing observations and differencing them against confirmed state, shared by all policies. | [Tasks](#tasks) | Fixed-interval and gated runs emit prediction records through the same derivation, documented in the `2d` prediction contract. | app/main.py:819, app/state.py:67, tests/test_scene.py:94, tests/test_scene.py:159, docs/data-contracts.md | 🟢 |
-| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | README.md (Gesture scene state) | 🟢 |
+| 5 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/app.md (Gesture scene state) | 🟢 |
 
 <!-- impl-notes-anchor -->
