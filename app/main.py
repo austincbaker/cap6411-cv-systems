@@ -6,7 +6,14 @@
 Every ``--interval-s`` seconds (ticks at ``t0 + k * interval`` on the monotonic
 clock, no drift) the newest source frame is sent to the VLM. With
 ``--policy gated`` (item 2a) a tick is sent only when ``gates.ChangeGate``
-triggers; gate skips go to ``drops.jsonl`` with origin ``gate``. At most one
+triggers; gate skips go to ``drops.jsonl`` with origin ``gate``. ``--policy idle`` runs
+the gate on every tick but never sends a request (every tick is logged as ``idle_no_call``
+with the gate's verdict in ``detail``): the pipeline's base cost for energy comparisons.
+``--policy budget`` (item 3c) runs the gate on every tick and lets ``budget.BudgetController``
+(item 3a) decide whether, and at what image size, a triggered change is sent under
+``--budget-wh-per-hour`` (energy above the idle pipeline): admitted at full or reduced size,
+deferred until the token bucket refills (one pending change is kept), or dropped once stale.
+Every tick's decision, bucket level and estimated spend go to ``budget.jsonl``. At most one
 request is in flight. A tick that fires while a request is still running is
 skipped and logged as ``tick_skipped_busy`` with the frame ID it would have
 sent; nothing is queued. Source acquisition runs on its own thread, so slow
@@ -19,6 +26,8 @@ Run directory (``--run-dir``, default ``runs/<UTC time>_<source>/``):
 - ``drops.jsonl``     skipped ticks and frames the source dropped, with IDs and reasons
 - ``power.csv``       power/energy samples, one row per sensor reading
 - ``predictions.jsonl`` gesture onsets and offsets from the shared scene derivation (item 2b)
+- ``budget.jsonl``    ``--policy budget`` only: one line per tick (and per settled call) with the
+  controller's decision, bucket level, estimated spend and allowance
 - ``manifest.json``   config, source metadata, end reasons, counts, power state, platform
 
 All ``host_*`` times are ``time.monotonic()`` seconds in this process;
@@ -68,6 +77,7 @@ import httpx
 import numpy as np
 
 from app.state import Evidence, GestureScene, ObservationState, render_overlay
+from budget import ADMIT_DECISIONS, BudgetConfig, BudgetController, load_cost_table
 from capture import EndReason, Frame, ReplaySource, SourceBase, SourceOpenError, WebcamSource
 from contracts import CONTRACT_VERSION, RUN_FILES, SCHEMAS, csv_row
 from energy.monitor import EnergyMonitor
@@ -82,8 +92,9 @@ from vlm.prompts import (
 )
 
 SCHEMA_VERSION = CONTRACT_VERSION
-POLICIES = ("fixed_interval", "gated")
+POLICIES = ("fixed_interval", "gated", "idle", "budget")
 PREDICTIONS_FILE = "predictions.jsonl"
+BUDGET_FILE = "budget.jsonl"
 WINDOW_NAME = "cap6411 baseline"
 SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
 
@@ -151,7 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--policy",
         choices=POLICIES,
         default="fixed_interval",
-        help="fixed_interval sends every tick; gated sends a tick only when the change gate triggers",
+        help="fixed_interval sends every tick; gated sends a tick only when the change gate "
+        "triggers; idle runs the gate on every tick but never sends (the pipeline's base cost); "
+        "budget sends gate triggers only as the energy budget allows (--budget-wh-per-hour)",
     )
     sched.add_argument(
         "--duration-s",
@@ -159,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="stop after this many seconds (default: until EOF / q / Ctrl-C)",
     )
 
-    gate = parser.add_argument_group("gate (--policy gated)")
+    gate = parser.add_argument_group("gate (--policy gated, idle and budget)")
     gate.add_argument(
         "--gate-threshold",
         type=positive_float,
@@ -201,6 +214,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="force a call after this many seconds without one (default: never)",
     )
 
+    bud = parser.add_argument_group("energy budget (--policy budget)")
+    bud.add_argument(
+        "--budget-wh-per-hour",
+        type=positive_float,
+        help="VLM energy allowed above the idle pipeline, in Wh per hour (= average watts); "
+        "required with --policy budget",
+    )
+    bud.add_argument(
+        "--budget-costs",
+        default="configs/budget_costs.json",
+        help="calibration table of joules per call by image size "
+        "(default configs/budget_costs.json, a placeholder until the suite calibrates)",
+    )
+    bud.add_argument(
+        "--budget-capacity-j",
+        type=positive_float,
+        help="token bucket capacity in joules (default: --budget-burst-calls full-size calls)",
+    )
+    bud.add_argument(
+        "--budget-burst-calls",
+        type=positive_float,
+        default=BudgetConfig.burst_calls,
+        help=f"bucket capacity in full-size calls when --budget-capacity-j is not given "
+        f"(default {BudgetConfig.burst_calls:g})",
+    )
+    bud.add_argument(
+        "--budget-pending-max-age-s",
+        type=positive_float,
+        default=BudgetConfig.pending_max_age_s,
+        help=f"drop a deferred change after this many seconds without a newer trigger "
+        f"(default {BudgetConfig.pending_max_age_s:g}, the event matcher's horizon)",
+    )
+    bud.add_argument(
+        "--budget-no-settle",
+        action="store_true",
+        help="charge each call its table estimate only, not rescaled by its measured latency",
+    )
+
     req = parser.add_argument_group("request")
     req.add_argument(
         "--profile",
@@ -224,6 +275,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="read timeout per request (default: the profile's)",
     )
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
+    req.add_argument(
+        "--image-max-side",
+        type=positive_int,
+        help="shrink each sent frame so its longer side is at most this many pixels "
+        "(default: send the source resolution); the gate always sees the full frame",
+    )
     req.add_argument(
         "--server-idle-timeout-s",
         type=positive_float,
@@ -272,6 +329,21 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         args.gate_config = gate_config(args)
     except ValueError as exc:
         parser.error(f"gate: {exc}")
+    if args.policy == "budget" and args.budget_wh_per_hour is None:
+        parser.error("--policy budget requires --budget-wh-per-hour")
+    if args.policy != "budget" and args.budget_wh_per_hour is not None:
+        parser.error("--budget-wh-per-hour is only valid with --policy budget")
+    args.budget_config = (
+        BudgetConfig(
+            budget_wh_per_hour=args.budget_wh_per_hour,
+            capacity_j=args.budget_capacity_j,
+            burst_calls=args.budget_burst_calls,
+            pending_max_age_s=args.budget_pending_max_age_s,
+            settle=not args.budget_no_settle,
+        )
+        if args.policy == "budget"
+        else None
+    )
     return args
 
 
@@ -288,6 +360,17 @@ def gate_config(config: argparse.Namespace) -> GateConfig:
 
 
 # ============================================================================ builders
+
+
+def build_budget(config: argparse.Namespace) -> Optional[BudgetController]:
+    """The budget controller for --policy budget (None otherwise); ConfigError on a bad table."""
+    if config.policy != "budget":
+        return None
+    try:
+        table = load_cost_table(config.budget_costs)
+        return BudgetController(config.budget_config, table, full_side=config.image_max_side)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise ConfigError(f"cannot use budget cost table {config.budget_costs}: {exc}")
 
 
 def build_source(config: argparse.Namespace, on_drop) -> SourceBase:
@@ -421,6 +504,16 @@ class LatestFrameSlot:
             return self._frame
 
 
+def shrink_to(image: np.ndarray, max_side: Optional[int]) -> np.ndarray:
+    """``image`` scaled down (aspect kept) so its longer side is at most ``max_side``."""
+    height, width = image.shape[:2]
+    if not max_side or max(height, width) <= max_side:
+        return image
+    scale = max_side / max(height, width)
+    size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+
 def encode_jpeg(image: np.ndarray, quality: int) -> bytes:
     ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
@@ -496,6 +589,11 @@ class BaselineRun:
             self.client.close()
             raise
         self.server_idle = server_idle or (lambda: server_is_idle(self.client.config.base_url))
+        try:
+            self.budget = build_budget(config)
+        except ConfigError:
+            self.client.close()
+            raise
         if config.telemetry == "on":
             self.energy_monitor = energy_monitor or EnergyMonitor(run_id=self.run_id)
             self.battery_reader = battery_reader or WindowsBatteryReader()
@@ -506,13 +604,14 @@ class BaselineRun:
         self.drops_log = JsonlWriter(self.run_dir / RUN_FILES["schedule"])
         self.power_log = CsvWriter(self.run_dir / RUN_FILES["power"], "power")
         self.predictions_log = JsonlWriter(self.run_dir / PREDICTIONS_FILE)
+        self.budget_log = JsonlWriter(self.run_dir / BUDGET_FILE) if self.budget else None
         # source_factory(on_drop) lets tests inject a source wired to this run's drop log.
         factory = source_factory or (lambda on_drop: build_source(config, on_drop))
         self.source = factory(self._on_source_drop)
         self.state = ObservationState()
         self.scene = GestureScene()
         self.open_onset: Optional[str] = None  # prediction_id of the gesture onset still up
-        self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
+        self.gate = ChangeGate(config.gate_config) if config.policy != "fixed_interval" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
         self.results: "queue.Queue[dict]" = queue.Queue()
@@ -794,6 +893,21 @@ class BaselineRun:
 
     def _handle_result(self, record: dict) -> None:
         record.update(answer_fields(record))
+        if self.budget is not None and record.get("budget_est_cost_j") is not None:
+            verdict = self.budget.settle(
+                time.monotonic(),
+                record.get("budget_image_max_side"),
+                record["budget_est_cost_j"],
+                record.get("elapsed_s"),
+            )
+            record["budget_cost_j"] = verdict.est_cost_j
+            self._log_budget(
+                verdict,
+                record["tick_index"],
+                record["host_tick_s"],
+                None,
+                request_id=record.get("request_id"),
+            )
         if record["status"] == "ok":
             self.state.bump(
                 f"answer:{record['gesture']}"
@@ -877,6 +991,8 @@ class BaselineRun:
                 return
         tick_origin = time.monotonic()
         self.times["host_tick_origin_s"] = tick_origin
+        if self.budget is not None:
+            self.budget.start(tick_origin)
         end_at = tick_origin + self.config.duration_s if self.config.duration_s else None
         tick_index = 0
         next_tick = tick_origin
@@ -897,6 +1013,7 @@ class BaselineRun:
             if now >= next_tick:
                 frame = self.slot.latest()
                 if self.in_flight is not None:
+                    self._budget_busy(now, tick_index, next_tick, frame)
                     self._log_tick_drop(
                         "tick_skipped_busy",
                         tick_index,
@@ -905,6 +1022,7 @@ class BaselineRun:
                         in_flight_frame_id=self.in_flight["frame_id"],
                     )
                 elif self.server_unknown_since is not None and not self.server_idle():
+                    self._budget_busy(now, tick_index, next_tick, frame)
                     self._log_tick_drop("tick_skipped_server_unknown", tick_index, next_tick, frame)
                     if now - self.server_unknown_since > self.config.server_idle_timeout_s:
                         self.run_end_reason = "server_not_idle"
@@ -913,6 +1031,21 @@ class BaselineRun:
                             "after a request with unknown server state"
                         )
                         self.source.stop()
+                elif self.budget is not None:
+                    self.server_unknown_since = None
+                    self._budget_tick(frame, now, tick_index, next_tick)
+                elif self.config.policy == "idle":
+                    decision = self._gate_decision(frame, now)
+                    if decision.trigger:  # move the reference as if sent, so the gate keeps working
+                        self.gate.acknowledge(decision, now)
+                    self._log_tick_drop(
+                        "idle_no_call",
+                        tick_index,
+                        next_tick,
+                        frame,
+                        **{k: v for k, v in decision.log_fields().items() if k != "gate_reason"},
+                        detail=decision.reason,
+                    )
                 elif (
                     decision := self._gate_decision(frame, now)
                 ) is not None and not decision.trigger:
@@ -932,22 +1065,8 @@ class BaselineRun:
                         self.gate.acknowledge(decision, now)
                         self.state.bump(decision.reason)
                         gate_fields = decision.log_fields()
-                    encode_start = time.monotonic()
-                    jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
-                    encode_s = time.monotonic() - encode_start
-                    self.in_flight = {
-                        "request_id": None,
-                        "tick_index": tick_index,
-                        "frame_id": frame.frame_id,
-                        "source_kind": frame.source_kind,
-                        "source_time_s": frame.source_time_s,
-                        "host_capture_s": frame.host_capture_s,
-                        "host_tick_s": next_tick,
-                        "request_started_s": time.monotonic(),
-                    }
-                    self.state.record_dispatch(frame.frame_id)
-                    self.jobs.put_nowait(
-                        (frame, jpeg, encode_s, tick_index, next_tick, gate_fields)
+                    self._dispatch(
+                        frame, tick_index, next_tick, gate_fields, self.config.image_max_side
                     )
                 # A late tick is still handled once, on the next pass; host_tick_s keeps its scheduled time.
                 tick_index += 1
@@ -959,6 +1078,114 @@ class BaselineRun:
 
             wait = max(0.0, min(next_tick - time.monotonic(), 0.02 if self.display else 0.05))
             self._drain_results(timeout=wait)
+
+    def _dispatch(
+        self,
+        frame: Frame,
+        tick_index: int,
+        host_tick_s: float,
+        extra_fields: Optional[dict],
+        image_max_side: Optional[int],
+    ) -> None:
+        encode_start = time.monotonic()
+        jpeg = encode_jpeg(shrink_to(frame.image, image_max_side), self.config.jpeg_quality)
+        encode_s = time.monotonic() - encode_start
+        self.in_flight = {
+            "request_id": None,
+            "tick_index": tick_index,
+            "frame_id": frame.frame_id,
+            "source_kind": frame.source_kind,
+            "source_time_s": frame.source_time_s,
+            "host_capture_s": frame.host_capture_s,
+            "host_tick_s": host_tick_s,
+            "request_started_s": time.monotonic(),
+        }
+        self.state.record_dispatch(frame.frame_id)
+        self.jobs.put_nowait((frame, jpeg, encode_s, tick_index, host_tick_s, extra_fields))
+
+    def _budget_tick(self, frame: Frame, now: float, tick_index: int, host_tick_s: float) -> None:
+        """--policy budget: the gate says whether something changed, the controller whether
+        and at what size to look. Exactly one request or drop line per tick, plus a budget line."""
+        decision = self.gate.decide(frame.image, now)
+        change = (frame, decision, tick_index) if decision.trigger else None
+        verdict = self.budget.step(now, change)
+        self._log_budget(verdict, tick_index, host_tick_s, frame, decision)
+        self.state.bump(f"budget:{verdict.decision}")
+        gate_extra = {k: v for k, v in decision.log_fields().items() if k != "gate_reason"}
+        if verdict.decision in ADMIT_DECISIONS:
+            sent, sent_decision, trigger_tick = verdict.item
+            self.gate.acknowledge(sent_decision, now)  # the sent frame becomes the reference
+            self.state.bump(sent_decision.reason)
+            self._dispatch(
+                sent,
+                tick_index,
+                host_tick_s,
+                {
+                    **sent_decision.log_fields(),
+                    "budget_decision": verdict.decision,
+                    "budget_image_max_side": verdict.image_max_side,
+                    "budget_est_cost_j": verdict.est_cost_j,
+                    "budget_trigger_tick_index": trigger_tick,
+                },
+                verdict.image_max_side,
+            )
+        elif verdict.decision == "no_change":
+            self._log_tick_drop(
+                decision.reason, tick_index, host_tick_s, frame, "gate", **gate_extra
+            )
+        else:  # defer or drop: the gate fired (now or earlier) but the budget held the call back
+            pending_frame = verdict.item[0] if verdict.item else self.budget.pending[0]
+            self._log_tick_drop(
+                "budget_deferred" if verdict.decision == "defer" else "budget_dropped_stale",
+                tick_index,
+                host_tick_s,
+                frame,
+                "budget",
+                **gate_extra,
+                detail=decision.reason,
+                pending_frame_id=pending_frame.frame_id,
+                pending_age_s=verdict.pending_age_s,
+                bucket_j=verdict.bucket_after_j,
+            )
+
+    def _budget_busy(self, now: float, tick_index: int, host_tick_s: float, frame: Frame) -> None:
+        """A tick where nothing can be sent: the bucket keeps refilling, a pending change waits."""
+        if self.budget is not None:
+            verdict = self.budget.step(now, busy=True)
+            self._log_budget(verdict, tick_index, host_tick_s, frame)
+            self.state.bump(f"budget:{verdict.decision}")
+
+    def _log_budget(
+        self,
+        verdict,
+        tick_index: Optional[int],
+        host_tick_s: Optional[float],
+        frame: Optional[Frame],
+        decision=None,
+        request_id: Optional[str] = None,
+    ) -> None:
+        pending = self.budget.pending
+        self.budget_log.write(
+            {
+                "schema_version": SCHEMA_VERSION,
+                "run_id": self.run_id,
+                "host_time_s": time.monotonic(),
+                "tick_index": tick_index,
+                "host_tick_s": host_tick_s,
+                "frame_id": None if frame is None else frame.frame_id,
+                "source_time_s": None if frame is None else frame.source_time_s,
+                "gate_reason": None if decision is None else decision.reason,
+                "gate_score": None if decision is None else decision.score,
+                "budget_wh_per_hour": self.budget.config.budget_wh_per_hour,
+                "capacity_j": self.budget.capacity_j,
+                **verdict.log_fields(),
+                "sent_frame_id": verdict.item[0].frame_id
+                if verdict.decision in ADMIT_DECISIONS
+                else None,
+                "pending_frame_id": None if pending is None else pending[0].frame_id,
+                "request_id": request_id,
+            }
+        )
 
     def _gate_decision(self, frame: Frame, now: float):
         """The gate's verdict on this tick's frame, or None under fixed_interval."""
@@ -1058,6 +1285,8 @@ class BaselineRun:
         )
         for log in (self.requests_log, self.drops_log, self.power_log, self.predictions_log):
             log.close()
+        if self.budget_log is not None:
+            self.budget_log.close()
         return RunResult(exit_code=exit_code, run_dir=self.run_dir, manifest=self.manifest)
 
     def _close_client(self) -> None:
@@ -1078,9 +1307,14 @@ class BaselineRun:
             "run_id": self.run_id,
             "policy": self.config.policy,
             "gate": None if self.gate is None else self.gate.config.as_dict(),
+            "budget": None if self.budget is None else self.budget.summary(end),
             "run_dir": str(self.run_dir),
             "argv": self.argv,
-            "config": {k: v for k, v in vars(self.config).items() if k != "gate_config"},
+            "config": {
+                k: v
+                for k, v in vars(self.config).items()
+                if k not in ("gate_config", "budget_config")
+            },
             "started_wall_utc": self.started_wall_utc,
             "time_bases": {
                 "host_*": "time.monotonic() seconds in this process",
@@ -1098,6 +1332,7 @@ class BaselineRun:
             "files": {
                 **{kind: name for kind, name in RUN_FILES.items() if kind != "manifest"},
                 "prediction": PREDICTIONS_FILE,
+                **({"budget": BUDGET_FILE} if self.budget is not None else {}),
             },
             "power_state": self.power_state,
             "scene": self.scene.as_dict(),

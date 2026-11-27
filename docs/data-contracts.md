@@ -60,6 +60,7 @@ Frame evidence, response availability and sensor sampling are separate times:
 | `drops.jsonl` | app | analyzer 3g | host | `schedule` |
 | `power.csv` | app | analyzer 3g | host | `power` |
 | `predictions.jsonl` | app, from the 2b event derivation | scorer 3d | source and host | `prediction` |
+| `budget.jsonl` | app, `--policy budget` only (3a/3c) | energy analysis | host and source | `budget` |
 | `annotations.csv` | James (1e, 2e) | scorer 3d | source | `annotation` |
 | `metrics.json` | scorer 3d (quality) and analyzer 3g (energy) | analyzer 3g, report | source and host | `metrics` |
 
@@ -112,8 +113,9 @@ may be missing (`null` or an empty cell).
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
-| `policy` | str | `fixed_interval` or `gated` now; later `idle`, `matched_invocation`, `budget` |
-| `gate` | object, *null* | gate settings (`threshold`, `pixel_delta`, `grid`, `min_interval_s`, `refresh_s`, `width`, `height`) for `gated`; *null* otherwise |
+| `policy` | str | `fixed_interval`, `gated`, `idle` (gate runs, no request is sent) or `budget` (gate plus energy-budget controller, 3a/3c); later `matched_invocation` |
+| `gate` | object, *null* | gate settings (`threshold`, `pixel_delta`, `grid`, `min_interval_s`, `refresh_s`, `width`, `height`) for `gated`, `idle` and `budget`; *null* otherwise |
+| `budget`? | object, *null* | `budget` runs: controller `config` (budget, capacity, pending age, settlement), `capacity_j`, the size `options`, the `cost_table` used (with its `placeholder` flag and `source`), `estimated_spend_j`, `allowance_j`, `estimated_spend_wh_per_hour`, `final_bucket_j`, `decisions` counts; *null* otherwise |
 | `run_dir` | str | |
 | `argv` | list, *null* | command-line arguments |
 | `config` | object | resolved app settings |
@@ -127,7 +129,7 @@ may be missing (`null` or an empty cell).
 | `source` | object | `info` (backend, `time_method`, requested and observed size/fps, `drop_counts`), `end` (`reason`, `detail`, `complete`) |
 | `vlm` | object | client `config`, `max_tokens`, llama-server `server_properties` |
 | `telemetry` | object | `enabled`, plus intervals and the sensor inventory when enabled |
-| `counts` | object | `requests`, `status:<status>`, `answer:<gesture>`, `answer_invalid:<answer_error>`, `prediction:<transition>:<label>`, each skip reason, `frames_delivered`, `power_samples` |
+| `counts` | object | `requests`, `status:<status>`, `answer:<gesture>`, `answer_invalid:<answer_error>`, `prediction:<transition>:<label>`, `budget:<decision>`, each skip reason, `frames_delivered`, `power_samples` |
 | `scene`? | object | final gesture scene (2b): `gesture`, `confirm`, `changed` (the answer that last changed it, *null* if none did), `last_valid`, `unknown_since_valid` |
 | `platform` | object | OS, kernel release (shows WSL2), machine, Python and library versions |
 
@@ -163,7 +165,8 @@ negative.
 | `server_state_unknown` | bool | true when the server may still be working on it |
 | `gesture`? | str, *null* | the validated answer (2c): `thumbs_up`, `peace_sign` or `none` (a valid negative); *null* when the request failed or the answer did not validate |
 | `answer_error`? | str, *null* | why an `ok` answer is not a valid observation: `truncated`, `not_json`, `not_object`, `missing_field`, `unexpected_fields`, `hands_not_text`, `out_of_vocabulary`; required when `status` is `ok` and `gesture` is *null*; *null* otherwise |
-| `gate_reason`? `gate_score`? `gate_global_score`? `gate_compute_s`? | | `gated` runs: why the gate sent it (`gate_initial`, `gate_change`, `gate_refresh`) and its score |
+| `gate_reason`? `gate_score`? `gate_global_score`? `gate_compute_s`? | | `gated` and `budget` runs: why the gate sent it (`gate_initial`, `gate_change`, `gate_refresh`) and its score |
+| `budget_decision`? `budget_image_max_side`? `budget_est_cost_j`? `budget_cost_j`? `budget_trigger_tick_index`? | | `budget` runs: `admit_full` or `admit_reduced`, the image size sent (*null* = source resolution), the cost estimate at admission and the settled cost, and the tick whose gate trigger it answers (earlier than `tick_index` when the call was deferred; `source_time_s` is that frame's) |
 | `elapsed_s`? `model`? `max_output_tokens`? `prompt_tokens`? `output_tokens`? `cached_tokens`? `finish_reason`? `http_status`? `encode_s`? `image_bytes`? | | client statistics; *null* when the server did not report them |
 
 ### `drops.jsonl` (kind `schedule`)
@@ -173,12 +176,40 @@ Every tick that did not send a request and every frame the source dropped.
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
-| `origin` | str | `app` (scheduler), `source` (capture) or `gate` (change gate, 2a) |
-| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `replay_late`, `empty_frame`, `read_failed`; origin `gate`: `gate_no_change`, `gate_persisting`, `gate_cooldown` |
+| `origin` | str | `app` (scheduler), `source` (capture), `gate` (change gate, 2a) or `budget` (energy-budget controller, 3a) |
+| `reason` | str | `tick_skipped_busy`, `tick_skipped_server_unknown`, `idle_no_call`, `replay_late`, `empty_frame`, `read_failed`; origin `gate`: `gate_no_change`, `gate_persisting`, `gate_cooldown`; origin `budget`: `budget_deferred` (a change is pending until the bucket refills), `budget_dropped_stale` (the pending change grew older than the pending age limit) |
 | `frame_id` | int, *null* | |
 | `host_time_s` | float | when it was logged |
 | `tick_index`? `host_tick_s`? `source_time_s`? `in_flight_frame_id`? `detail`? | | |
 | `gate_score`? `gate_global_score`? `gate_compute_s`? | float, *null* | gate skips: most-changed cell and global changed fractions, scoring time |
+| `pending_frame_id`? `pending_age_s`? `bucket_j`? | | budget skips: the pending change's frame, its age and the bucket level after the decision |
+
+### `budget.jsonl` (kind `budget`)
+
+`--policy budget` runs only. One line per scheduling tick, plus one `settle` line per
+finished call, so spend can be plotted against the budget over time. Every tick also has its
+usual line in `requests.jsonl` or `drops.jsonl`. Energy here is the controller's *estimate*
+from its cost table, in joules above the idle pipeline; measured energy comes from the power
+files. One Wh per hour is one watt, so the bucket refills at `budget_wh_per_hour` J/s.
+
+| Field | Type | Notes |
+|---|---|---|
+| `schema_version`, `run_id` | str | |
+| `decision` | str | `no_change` (gate quiet, nothing pending), `busy` (a request is in flight or the server state is unknown), `admit_full`, `admit_reduced`, `defer`, `drop`, `settle` |
+| `host_time_s` | float | when the line was written |
+| `tick_index`, `host_tick_s` | int, float, *null* | the tick; for `settle`, the tick that sent the call |
+| `frame_id`, `source_time_s` | *null* | the tick's newest frame; *null* for `settle` |
+| `gate_reason`, `gate_score` | *null* | the gate's verdict on this tick (*null* on `busy` and `settle`) |
+| `budget_wh_per_hour`, `capacity_j` | float | the budget and the bucket capacity |
+| `image_max_side` | int, *null* | size admitted or settled; *null* = source resolution or no admission |
+| `est_cost_j` | float, *null* | admit: estimated cost debited; defer: the cheapest size that did not fit; settle: the settled cost |
+| `bucket_before_j`, `bucket_after_j` | float | bucket level after refill and after the decision; only admits and settles change it; settlement may leave it negative |
+| `spent_j`, `allowance_j` | float | cumulative estimated spend, and capacity plus everything accrued since the first tick |
+| `pending_age_s` | float, *null* | age of the pending change at this decision |
+| `replaced_pending`? | bool | this tick's trigger replaced an older pending change |
+| `sent_frame_id` | int, *null* | admits only: the frame sent (the pending change's, possibly from an earlier tick) |
+| `pending_frame_id` | int, *null* | the change still pending after the decision |
+| `request_id` | str, *null* | `settle` only |
 
 ### `power.csv` (kind `power`)
 
@@ -396,6 +427,9 @@ contract targets, not measured gesture-detection results. Their
   valid samples are used and one is invalid. Package energy is unavailable.
 - `power_ac_online.csv` with `expected_metrics_ac_online.json`: the same run
   plugged in, so battery energy is `not_on_battery`.
+- `budget_valid.jsonl`: six controller lines at 1 Wh per hour (12 J bucket, 6 J full-size
+  and 3 J 384 px calls): an admit and its settlement, a quiet tick, a second admit, a deferred
+  change at frame 45 and that change sent at 384 px two ticks later.
 - `invalid/`: one file per failure kind:
   - wrong version and missing manifest field
   - `ok` with empty text, missing field, failure without an error, wrong type
@@ -405,6 +439,9 @@ contract targets, not measured gesture-detection results. Their
   - end before onset, unknown label, unknown split
   - availability before evidence
   - negative count, out-of-range precision, energy given both a value and a reason
+  - budget lines: a defer that changed the bucket, an admit without its sent frame, an
+    unknown decision, a bucket above capacity, a settle without a cost, a tick without its
+    index
 
 ## Open items
 

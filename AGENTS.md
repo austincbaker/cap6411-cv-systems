@@ -33,9 +33,10 @@
 - **Structure:** Planning documents live in `TODO_Plan/` and
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
   Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`,
-  `src/contracts/`, `src/gates/`, `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
+  `src/contracts/`, `src/gates/`, `src/budget/` (energy-budget controller, items 3a/3c),
+  `app/`, `configs/`, `scripts/`, `tests/` and `docs/`.
   Setuptools discovers packages under `src/`; imports are `vlm`, `energy`,
-  `capture`, `contracts` and `gates`, not `src.vlm` etc.
+  `capture`, `contracts`, `gates` and `budget`, not `src.vlm` etc.
   `app/` is not a package under `src/`; run it from the repository root.
   `tests/fixtures/contracts/` holds the item 2d contract fixtures.
   `data/README.md` documents the pilot gestures; `data/annotations/` holds their
@@ -73,11 +74,21 @@ rather than duplicating it once those steps exist.
   item `2a` change gate. See the README's "Capture and baseline" section. Check run files against the item `2d`
   contract with `uv run contracts-check RUN_DIR`. Gate checks on gesture clips use
   `scripts/jester_replay.py`, `scripts/gate_check.py` and `scripts/gate_sweep.py`
-  (README, "Change gate").
+  (README, "Change gate"). The pilot comparison (fixed 2 s against gated 0.5 s) is
+  rerun with `scripts/run_pilot_eval.py` and scored with `scripts/score_pilot_eval.py`
+  (README, "Reproduce the main numbers"); always pass `--interval-s`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
   artifact locations are documented in the README. Python package installation
   is managed by `uv sync` using the setuptools configuration in `pyproject.toml`.
+- **Energy suite (macOS):** `uv run python scripts/energy_suite.py prepare` builds
+  the pinned llama.cpp with Metal; `uv run python scripts/energy_suite.py run`
+  runs the policy matrix in `configs/energy_suite.json` and
+  `uv run python scripts/analyze_energy_suite.py SUITE_DIR` writes its CSVs and
+  figures; `uv run python scripts/energy_suite.py calibrate SUITE_DIR` writes the budget
+  controller's cost table (`budget_costs.json`) from a suite's idle and fixed runs. See
+  `docs/energy_runbook.md` (powermetrics asks for sudo once; tests use
+  `tests/fakes/fake_powermetrics.py`).
 - **Run a focused test:** After setup, run
   `uv run python -m pytest tests/test_inference_client.py -q` or replace the
   filename with the affected test module.
@@ -136,15 +147,15 @@ rather than duplicating it once those steps exist.
 - Keep sensor domains separate (CPU/package versus battery/whole laptop) and
   total versus incremental energy separate. Do not label package energy as
   whole-system energy.
-- Measured energy, latency and model-compatibility results count only when
-  produced on the team laptop's WSL2 experiment platform. WSL2 exposes no
-  package (RAPL) energy, so energy results are whole-laptop battery energy
-  from runs on battery power, using the source qualified in item `1b`; report
-  energy as unavailable when no source qualifies.
+- Measured energy, latency and model-compatibility results count when produced
+  on a designated experiment platform: the team laptop's WSL2 setup (item `1b`
+  battery source; WSL2 exposes no package/RAPL energy) or, for the report's
+  policy comparisons, Alejandro's Apple M2 MacBook Pro through the macOS suite
+  (`scripts/energy_suite.py`, `docs/energy_runbook.md`; plan revision 10).
+  Report energy as unavailable when no source qualifies.
 - Results can vary across laptops. Record the laptop/configuration for every run,
   requalify sensors on additional machines, and compare policies on the same laptop.
-  Keep results from different machines separate; the designated experiment-platform
-  requirement above still applies to project acceptance.
+  Keep results from different machines separate.
 - Write each run to a new output directory and never overwrite prior results.
   After the item `3h` evaluation freeze, a behavior change requires rerunning
   the affected experiments, and held-out data must not be used for tuning.
