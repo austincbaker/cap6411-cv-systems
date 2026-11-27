@@ -40,7 +40,12 @@ REQUEST_STATUSES = frozenset(
         "abandoned_at_shutdown",
     }
 )
-SCHEDULE_ORIGINS = frozenset({"app", "source", "gate"})
+SCHEDULE_ORIGINS = frozenset({"app", "source", "gate", "budget"})
+# Energy-budget controller decisions (items 3a/3c), one budget.jsonl line per tick or settled call.
+BUDGET_DECISIONS = frozenset(
+    {"no_change", "busy", "admit_full", "admit_reduced", "defer", "drop", "settle"}
+)
+BUDGET_FILE = "budget.jsonl"
 POWER_SOURCES = frozenset({"windows_battery", "sysfs", "telemetry_error"})
 SPLITS = frozenset({"dev", "validation", "test"})
 # Primary task: thumbs_up and peace_sign (plan revision 9).
@@ -191,6 +196,31 @@ SCHEMAS: dict[str, tuple[Field, ...]] = {
         _f("response_available_s", "float"),
         _f("available_source_time_s", "float", null=True),
         _f("observation", "any", opt=True, null=True),
+    ),
+    "budget": (
+        _f("schema_version", "str"),
+        _f("run_id", "str"),
+        _f("decision", "str", choices=BUDGET_DECISIONS),
+        _f("host_time_s", "float"),
+        _f("tick_index", "int", null=True),
+        _f("host_tick_s", "float", null=True),
+        _f("frame_id", "int", null=True),
+        _f("source_time_s", "float", null=True),
+        _f("gate_reason", "str", null=True),
+        _f("gate_score", "float", null=True),
+        _f("budget_wh_per_hour", "float"),
+        _f("capacity_j", "float"),
+        _f("image_max_side", "int", null=True),
+        _f("est_cost_j", "float", null=True),
+        _f("bucket_before_j", "float"),
+        _f("bucket_after_j", "float"),
+        _f("spent_j", "float"),
+        _f("allowance_j", "float"),
+        _f("pending_age_s", "float", null=True),
+        _f("replaced_pending", "bool", opt=True),
+        _f("sent_frame_id", "int", null=True),
+        _f("pending_frame_id", "int", null=True),
+        _f("request_id", "str", null=True),
     ),
     "metrics": (
         _f("schema_version", "str"),
@@ -422,7 +452,28 @@ def _manifest_rules(r: dict) -> list[str]:
     return out
 
 
+def _budget_rules(r: dict) -> list[str]:
+    out = []
+    decision = r["decision"]
+    if decision in ("admit_full", "admit_reduced"):
+        if r["est_cost_j"] is None or r["sent_frame_id"] is None:
+            out.append(f"{decision} needs est_cost_j and sent_frame_id")
+    elif r["sent_frame_id"] is not None:
+        out.append("only an admit has a sent_frame_id")
+    if decision == "settle" and r["est_cost_j"] is None:
+        out.append("settle needs est_cost_j (the settled cost)")
+    if decision != "settle" and r["tick_index"] is None:
+        out.append("a tick decision needs tick_index")
+    if r["bucket_after_j"] > r["capacity_j"] + 1e-6:
+        out.append("bucket_after_j is above capacity_j")
+    if decision not in ("admit_full", "admit_reduced", "settle"):
+        if not math.isclose(r["bucket_after_j"], r["bucket_before_j"], abs_tol=1e-9):
+            out.append(f"{decision} must not change the bucket")
+    return out
+
+
 _RULES = {
+    "budget": _budget_rules,
     "request": _request_rules,
     "power": _power_rules,
     "annotation": _annotation_rules,
@@ -522,6 +573,21 @@ def validate_run_dir(run_dir: Path | str) -> list[Issue]:
                 issues.append(
                     Issue(kind, f"{run_dir / RUN_FILES[kind]}[{i}]", "run_id differs from manifest")
                 )
+    budget = run_dir / BUDGET_FILE
+    if budget.exists():
+        records, found = read_artifact("budget", budget)
+        issues.extend(found)
+        request_ids = {r.get("request_id") for r in loaded["request"] if isinstance(r, dict)}
+        for i, record in enumerate(records):
+            if not isinstance(record, dict):
+                continue
+            where = f"{budget}[{i}]"
+            if record.get("run_id") != run_id:
+                issues.append(Issue("budget", where, "run_id differs"))
+            if record.get("decision") == "settle" and record.get("request_id") not in request_ids:
+                issues.append(Issue("budget", where, "settled request_id not in requests.jsonl"))
+    elif manifest.get("policy") == "budget":
+        issues.append(Issue("budget", str(budget), "policy budget run has no budget.jsonl"))
     predictions = run_dir / "predictions.jsonl"
     if predictions.exists():
         records, found = read_artifact("prediction", predictions)
