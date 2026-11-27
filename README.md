@@ -289,6 +289,7 @@ runner (#18); change them only with a note to its owner.
 | `--profile PATH` | `configs/inference.json` | inference profile: server address, model, bounds |
 | `--prompt`, `--max-tokens`, `--request-timeout-s` | profile values | request settings; `--max-tokens` cannot exceed the profile bound |
 | `--jpeg-quality` | `85` | JPEG quality of the frame sent to the VLM |
+| `--image-max-side N` | source size | shrink each sent frame to at most N pixels on its longer side (the gate still sees the full frame) |
 | `--server-idle-timeout-s` | `60` | after an uncertain timeout, end the run if the server stays busy this long |
 | `--telemetry on\|off` | `on` | sysfs and Windows battery telemetry |
 | `--telemetry-interval-s`, `--battery-interval-s` | `1`, `10` | sample intervals for sysfs and the Windows battery report |
@@ -352,6 +353,11 @@ Gate skips carry `gate_score`, `gate_global_score` and `gate_compute_s` (time
 spent scoring, for gate-overhead accounting); sent requests carry the same
 fields plus `gate_reason`. The manifest records `policy` and the `gate`
 settings, and `counts` has one entry per reason.
+
+`--policy idle` runs the same gate on every tick but never sends a request: each tick is
+logged as `idle_no_call` with the gate's verdict in `detail`. It measures the pipeline's
+base cost (capture, gate and an idle server) for energy comparisons; see
+`docs/energy_runbook.md`.
 
 #### Choosing the gate settings
 

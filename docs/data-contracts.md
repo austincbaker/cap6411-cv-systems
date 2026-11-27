@@ -112,7 +112,7 @@ may be missing (`null` or an empty cell).
 | Field | Type | Notes |
 |---|---|---|
 | `schema_version`, `run_id` | str | |
-| `policy` | str | `fixed_interval` or `gated` now; later `idle`, `matched_invocation`, `budget` |
+| `policy` | str | `fixed_interval`, `gated` or `idle` (gate runs, no request is sent) now; later `matched_invocation`, `budget` |
 | `gate` | object, *null* | gate settings (`threshold`, `pixel_delta`, `grid`, `min_interval_s`, `refresh_s`, `width`, `height`) for `gated`; *null* otherwise |
 | `run_dir` | str | |
 | `argv` | list, *null* | command-line arguments |
