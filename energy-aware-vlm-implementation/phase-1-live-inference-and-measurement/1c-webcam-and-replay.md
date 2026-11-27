@@ -5,7 +5,7 @@
 **GitHub blocked by:** None
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: ⬜ Not started
+**Status**: 🟢 Done (issue #3 closed; used by every baseline and pilot run)
 **Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D05, D06, D11; R06, R08
 **Depends on**: None; independent Phase 1 discovery/build item
 **Blocks**: [1d](../phase-1-live-inference-and-measurement/1d-fixed-interval-application.md), [2a](../phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md)
@@ -16,9 +16,9 @@ Owner: Alejandro. Provide interchangeable webcam and recorded-video input with e
 
 ## Tasks
 
-- [ ] Implement webcam capture with timestamped frames and explicit device errors.
-- [ ] Implement real-time replay with source-video timing and deterministic frame identity.
-- [ ] Release camera/file resources on completion or interruption and document source metadata.
+- [x] Implement webcam capture with timestamped frames and explicit device errors.
+- [x] Implement real-time replay with source-video timing and deterministic frame identity.
+- [x] Release camera/file resources on completion or interruption and document source metadata.
 
 ## Files to be touched
 
@@ -35,8 +35,8 @@ None newly surfaced. Apply the parent plan and resolve measured settings in the 
 
 ## Acceptance criteria
 
-- [ ] Both input types deliver identifiable frames on a documented time base.
-- [ ] Replay finishes cleanly at EOF and input failures do not look like successful idle periods.
+- [x] Both input types deliver identifiable frames on a documented time base.
+- [x] Replay finishes cleanly at EOF and input failures do not look like successful idle periods.
 
 ## Definition of Done
 
@@ -44,10 +44,10 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Implement webcam capture with timestamped frames and explicit device errors. | [Tasks](#tasks) | Available camera frames are delivered and inaccessible devices fail visibly. | — | ⬜ |
-| 2 | Implement real-time replay with source-video timing and deterministic frame identity. | [Tasks](#tasks) | Replays preserve video-relative timing without running as fast as decoding allows. | — | ⬜ |
-| 3 | Release camera/file resources on completion or interruption and document source metadata. | [Tasks](#tasks) | Both source types close cleanly and can be opened again. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 1 | Implement webcam capture with timestamped frames and explicit device errors. | [Tasks](#tasks) | Available camera frames are delivered and inaccessible devices fail visibly. | src/capture/webcam.py:85, src/capture/webcam.py:129, tests/test_capture_sources.py:291, tests/test_capture_sources.py:325 | 🟢 |
+| 2 | Implement real-time replay with source-video timing and deterministic frame identity. | [Tasks](#tasks) | Replays preserve video-relative timing without running as fast as decoding allows. | src/capture/replay.py:160, src/capture/replay.py:218, tests/test_capture_sources.py:42, tests/test_capture_sources.py:253 | 🟢 |
+| 3 | Release camera/file resources on completion or interruption and document source metadata. | [Tasks](#tasks) | Both source types close cleanly and can be opened again. | src/capture/frame.py:190, tests/test_capture_sources.py:207, tests/test_capture_sources.py:370 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | src/capture/frame.py:35, tests/test_capture_sources.py:138, tests/test_capture_sources.py:185 | 🟢 |
 
 ## Implementation notes
 

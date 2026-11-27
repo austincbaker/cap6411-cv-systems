@@ -90,7 +90,7 @@ The original Design choices remain settled. Stable identifiers below let item pl
 | D13 | Event derivation | Unassigned | `2b` normalizes validated per-frame observations and differences them against confirmed state; every policy shares it and `2d` documents it | new decision, rev. 6 |
 | D14 | Evaluation freeze | Freezes in `2d`, `2f` and `3h` | `2d`/`2f` produce version-1 contracts and templates; `3h` is the only evaluation freeze | new decision, rev. 6 |
 
-**Document authority:** `TODO_Plan/build-energy-aware-vlm-assistant.md` is the canonical master plan. `energy-aware-vlm-implementation/plan.md` is its synchronized reading copy, with local links adjusted for that directory. Future decisions must update the canonical plan and refresh the reading copy together; no separate decisions file is used.
+**Document authority:** `energy-aware-vlm-implementation/plan.md` is the master plan (rev. 11; it was a synchronized copy of `TODO_Plan/build-energy-aware-vlm-assistant.md`, now removed). Future decisions update it in place with a revision entry; no separate decisions file is used.
 
 **Next deliverable (rev. 8):** Continue the remaining application, contract and evaluation work using the accepted `1a`/`1b` components. Native Windows battery readings are qualified for longer controlled trials; shared schemas and final evaluation remain in their assigned items. See the [implementation index](./README.md).
 
@@ -244,7 +244,7 @@ Required command-line behavior includes useful errors for malformed input, separ
 - [ ] **Shawn:** Execute three repeated energy trials per main configuration and generate final tables, latency distributions and energy-quality plots.
 - [ ] **Austin and Alejandro:** Complete a 30-minute stability run and fix blocking defects; record any changes that require rerunning affected experiments.
 - [ ] **Austin and Shawn:** Report budget adherence, total versus incremental energy, sensor limitations and any infeasible budgets or overrides.
-- [ ] **James and Shawn:** Draft dataset, method and results sections in `docs/final_report.md`; Austin and Alejandro supply and review architecture and implementation sections.
+- [ ] **James and Shawn:** Draft dataset, method and results sections in the report under `docs/report/`; Austin and Alejandro supply and review architecture and implementation sections.
 - [ ] **All:** Finish the demonstration and reproducibility instructions in `README.md`; have another member rerun one documented example.
 - [ ] **Optional — James:** Add a viewer linking error rows to source frames and model responses after required scoring is complete.
 - **Acceptance criteria:** Required CLI deliverables, repeated measurements, held-out results, report and demo are complete; limitations and negative findings are preserved.
@@ -306,7 +306,7 @@ One stub corresponds to each of the 27 existing phase checklist items. Dependenc
 - [ ] `docs/data-contracts.md` — Schemas, units, timelines, sample fixtures, matching rules and missing-value behavior.
 - [ ] `data/README.md` — Event definitions, recording protocol, grouped splits, provenance and data-sharing terms.
 - [ ] `docs/methodology.md` — Controls, baselines, sensor domains, repeat strategy, energy normalization and frozen evaluation choices.
-- [ ] `docs/final_report.md` — Research framing, related work, architecture, experiments, failures and practical limitations.
+- [ ] `docs/report/` — Research framing, related work, architecture, experiments, failures and practical limitations.
 
 ---
 
@@ -332,7 +332,7 @@ All paths except the existing `README.md` are proposed targets. Check for an est
 | `tests/test_energy_analysis.py`, `tests/test_benchmark_runner.py` | Proposed energy math and experiment execution tests; Shawn. |
 | `src/contracts.py`, `tests/test_contracts.py`, `tests/test_prompts.py` | Proposed shared contract validator and prompt-validation tests (rev. 6); Austin/Alejandro. |
 | `tests/test_scheduler.py`, `tests/test_budget.py` | Proposed scheduler and controller correctness tests; Alejandro/Austin. |
-| `data/README.md`, `docs/methodology.md`, `docs/final_report.md` | Proposed data protocol, measurement method and report; James/Shawn coordinate, all contribute. |
+| `data/README.md`, `docs/methodology.md`, `docs/report/` | Proposed data protocol, measurement method and report; James/Shawn coordinate, all contribute. |
 
 ---
 
@@ -585,3 +585,20 @@ no VLM calls) as the incremental-energy baseline.
 **Propagation:** D11 row, `AGENTS.md` measurement rules, README options table
 (`--policy idle`, `--image-max-side`) and `docs/data-contracts.md` (`idle` policy). No
 dependency edges, priorities or issue states change.
+
+### Revision 11 — 2026-11-27 — one master plan and status at submission
+
+**Trigger and authority:** Alejandro approved the repository audit's follow-ups before the
+2026-11-30 submission.
+
+**Plan copies:** `TODO_Plan/build-energy-aware-vlm-assistant.md` is removed; this file is the
+only master plan. The two copies differed only in relative links.
+
+**Report path:** The report is LaTeX under `docs/report/`, not `docs/final_report.md`; the
+4a, 4b, 4d, 4e and 4f item plans and this plan now name that directory.
+
+**Statuses:** `1c` and `1d` are marked done with code references (issues #3 and #4 were
+closed); `2d` records that version `1-draft` is in use without consumer sign-off; `3a` and
+`3c` record the budget controller and `--policy budget` from PR #48. The other phase 3 and 4
+items are future work as of submission. No decisions, dependency edges, owners or
+priorities change.

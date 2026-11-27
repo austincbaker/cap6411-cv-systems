@@ -5,7 +5,7 @@
 **GitHub blocked by:** [1a (#1)](https://github.com/austincbaker/cap6411-cv-systems/issues/1), [1b (#2)](https://github.com/austincbaker/cap6411-cv-systems/issues/2), [1c (#3)](https://github.com/austincbaker/cap6411-cv-systems/issues/3)
 
 **Phase**: 1 — Establish live inference and measurement
-**Status**: ⬜ Not started
+**Status**: 🟢 Done (issue #4 closed; `uv run python -m app.main`, see the README)
 **Plan refs**: [Master plan](../plan.md#phase-1--establish-live-inference-and-measurement-week-1); D03, D05, D06, D08; R06
 **Depends on**: [1a](../phase-1-live-inference-and-measurement/1a-local-vlm-inference.md), [1b](../phase-1-live-inference-and-measurement/1b-power-telemetry.md), [1c](../phase-1-live-inference-and-measurement/1c-webcam-and-replay.md)
 **Blocks**: [2a](../phase-2-gated-application-and-contracts/2a-change-and-relevance-gate.md), [2b](../phase-2-gated-application-and-contracts/2b-latest-frame-and-scene-state.md), [2d](../phase-2-gated-application-and-contracts/2d-evaluation-contracts-and-fixtures.md), [3f](../phase-3-budget-control-and-evaluation-tools/3f-benchmark-runner.md)
@@ -16,9 +16,9 @@ Owner: Alejandro, integrating Austin's inference and telemetry. Build the first 
 
 ## Tasks
 
-- [ ] Connect webcam/replay, persistent inference and telemetry in the application entry point.
-- [ ] Implement configurable fixed-interval invocation and minimal scene display.
-- [ ] Record failures, measured duration and overload rather than building an unbounded work queue.
+- [x] Connect webcam/replay, persistent inference and telemetry in the application entry point.
+- [x] Implement configurable fixed-interval invocation and minimal scene display.
+- [x] Record failures, measured duration and overload rather than building an unbounded work queue.
 
 ## Files to be touched
 
@@ -36,8 +36,8 @@ None newly surfaced. Apply the parent plan and resolve measured settings in the 
 
 ## Acceptance criteria
 
-- [ ] The same entry point runs camera or replay with a configurable fixed interval.
-- [ ] A short end-to-end run produces response and telemetry artifacts with declared timing.
+- [x] The same entry point runs camera or replay with a configurable fixed interval.
+- [x] A short end-to-end run produces response and telemetry artifacts with declared timing.
 
 ## Definition of Done
 
@@ -45,9 +45,9 @@ The stub is considered complete when every row below shows 🟢.
 
 | # | Task summary | Where in file | Done when | Implemented at | Status |
 |---|---|---|---|---|---|
-| 1 | Connect webcam/replay, persistent inference and telemetry in the application entry point. | [Tasks](#tasks) | One source can drive a recorded baseline run with response and sensor observations. | — | ⬜ |
-| 2 | Implement configurable fixed-interval invocation and minimal scene display. | [Tasks](#tasks) | Changing the interval changes invocation timing and visible results. | — | ⬜ |
-| 3 | Record failures, measured duration and overload rather than building an unbounded work queue. | [Tasks](#tasks) | A slow request produces documented dropped/skipped work and the application shuts down cleanly. | — | ⬜ |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | — | ⬜ |
+| 1 | Connect webcam/replay, persistent inference and telemetry in the application entry point. | [Tasks](#tasks) | One source can drive a recorded baseline run with response and sensor observations. | app/main.py:376, app/main.py:640, tests/test_app_baseline.py:341, tests/test_app_baseline.py:438 | 🟢 |
+| 2 | Implement configurable fixed-interval invocation and minimal scene display. | [Tasks](#tasks) | Changing the interval changes invocation timing and visible results. | app/main.py:988, app/main.py:1200, app/state.py:212, tests/test_app_baseline.py:85 | 🟢 |
+| 3 | Record failures, measured duration and overload rather than building an unbounded work queue. | [Tasks](#tasks) | A slow request produces documented dropped/skipped work and the application shuts down cleanly. | app/main.py:1018, tests/test_app_baseline.py:137, tests/test_app_baseline.py:299 | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | app/main.py:1378, tests/test_app_baseline.py:327 | 🟢 |
 
 <!-- impl-notes-anchor -->

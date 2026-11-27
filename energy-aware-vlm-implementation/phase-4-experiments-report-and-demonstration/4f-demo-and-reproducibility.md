@@ -27,7 +27,7 @@ Owners: All four members. Demonstrate live thumbs-up and peace-sign events and r
 ## Files to be touched
 
 - `README.md` — Final setup, demo and reproducibility steps.
-- `docs/final_report.md` — Reproduction record and contribution summary.
+- `docs/report/` — Reproduction record and contribution summary.
 
 ## Source references (if porting)
 

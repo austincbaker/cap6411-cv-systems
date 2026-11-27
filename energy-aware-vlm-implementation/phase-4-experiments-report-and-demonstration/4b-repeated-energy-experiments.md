@@ -27,7 +27,7 @@ Owner: Shawn. Execute the final repeated energy comparison and generate exportab
 ## Files to be touched
 
 - `results/` — Generated final energy and comparison artifacts.
-- `docs/final_report.md` — Experiment counts and results references.
+- `docs/report/` — Experiment counts and results references.
 
 ## Source references (if porting)
 

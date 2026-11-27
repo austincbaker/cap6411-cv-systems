@@ -26,7 +26,7 @@ Owner: James. Apply the frozen evaluator to the held-out prediction logs produce
 
 ## Files to be touched
 
-- `docs/final_report.md` — Quality results and failures.
+- `docs/report/` — Quality results and failures.
 - `results/` — Proposed generated scoring artifacts; commit policy follows data terms.
 
 ## Source references (if porting)
