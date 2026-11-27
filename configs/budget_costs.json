@@ -1,0 +1,11 @@
+{
+  "table_version": 1,
+  "placeholder": true,
+  "source": "PLACEHOLDER, not a measurement: Mac mini Metal call latencies (median, 1280x720 thumbs_mov_1 frames: 307/241/175 prompt tokens) times an assumed 10 W above idle while a call runs. Replace with `scripts/energy_suite.py calibrate` output from the MacBook suite.",
+  "domain": null,
+  "entries": [
+    {"image_max_side": null, "j_per_call": 6.0, "latency_s": 0.60},
+    {"image_max_side": 768, "j_per_call": 4.8, "latency_s": 0.48},
+    {"image_max_side": 384, "j_per_call": 3.8, "latency_s": 0.38}
+  ]
+}
