@@ -75,15 +75,17 @@ rather than duplicating it once those steps exist.
   `scripts/jester_replay.py`, `scripts/gate_check.py` and `scripts/gate_sweep.py`
   (README, "Change gate"). The pilot comparison (fixed 2 s against gated 0.5 s) is
   rerun with `scripts/run_pilot_eval.py` and scored with `scripts/score_pilot_eval.py`
-  (README, "Reproduce the main numbers"); always pass `--interval-s`. The macOS energy suite is
-  `uv run python scripts/energy_suite.py prepare|run` and
-  `uv run python scripts/analyze_energy_suite.py SUITE_DIR`; see
-  `docs/energy_runbook.md` (powermetrics asks for sudo once; tests use
-  `tests/fakes/fake_powermetrics.py`).
+  (README, "Reproduce the main numbers"); always pass `--interval-s`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds
   the pinned CPU-only server and verifies model downloads; prerequisites and
   artifact locations are documented in the README. Python package installation
   is managed by `uv sync` using the setuptools configuration in `pyproject.toml`.
+- **Energy suite (macOS):** `uv run python scripts/energy_suite.py prepare` builds
+  the pinned llama.cpp with Metal; `uv run python scripts/energy_suite.py run`
+  runs the policy matrix in `configs/energy_suite.json` and
+  `uv run python scripts/analyze_energy_suite.py SUITE_DIR` writes its CSVs and
+  figures. See `docs/energy_runbook.md` (powermetrics asks for sudo once; tests
+  use `tests/fakes/fake_powermetrics.py`).
 - **Run a focused test:** After setup, run
   `uv run python -m pytest tests/test_inference_client.py -q` or replace the
   filename with the affected test module.
