@@ -58,23 +58,24 @@
 ## Setup and commands
 
 Run commands from the repository root unless stated otherwise. `README.md` is
-the single source for install and run steps; keep this section pointing at it
-rather than duplicating it once those steps exist.
+the single source for install steps and for reproducing the main numbers;
+`docs/app.md` documents every component command and app flag. Keep this
+section pointing at them rather than duplicating them.
 
 - **Prerequisites and installation:** Follow `README.md`; install Python
   dependencies with `uv sync --extra dev`. `pyproject.toml` and `uv.lock`
   define and lock dependencies. Pinned model/runtime settings belong in
   `configs/inference.json`, not in this instruction file.
-- **Run locally:** See the README for `uv run python scripts/llama_runtime.py serve`,
-  `uv run vlm-smoke ...` and diagnostic `uv run energy-monitor ...`. The README also
+- **Run locally:** See `docs/app.md` for `uv run python scripts/llama_runtime.py serve`,
+  `uv run vlm-smoke ...` and diagnostic `uv run energy-monitor ...`. It also
   documents `WindowsBatteryReader` and the owner-authorized unplugged
   `scripts/qualify_battery.py` check; see `docs/1b-battery-qualification.md` for the
   qualified Windows battery source and WSL sysfs scale limitation. The fixed-interval
   application is `uv run python -m app.main` (item `1d`); `--policy gated` adds the
-  item `2a` change gate. See the README's "Capture and baseline" section. Check run files against the item `2d`
+  item `2a` change gate. See `docs/app.md`, "The application". Check run files against the item `2d`
   contract with `uv run contracts-check RUN_DIR`. Gate checks on gesture clips use
   `scripts/jester_replay.py`, `scripts/gate_check.py` and `scripts/gate_sweep.py`
-  (README, "Change gate"). The pilot comparison (fixed 2 s against gated 0.5 s) is
+  (`docs/app.md`, "Change gate"). The pilot comparison (fixed 2 s against gated 0.5 s) is
   rerun with `scripts/run_pilot_eval.py` and scored with `scripts/score_pilot_eval.py`
   (README, "Reproduce the main numbers"); always pass `--interval-s`.
 - **Build or package:** `uv run python scripts/llama_runtime.py prepare` builds

@@ -51,7 +51,7 @@ The stub is considered complete when every row below shows 🟢.
 |---|---|---|---|---|---|
 | 1 | Implement normalized global/regional change scores against recent and acknowledged references. | [Tasks](#tasks) | Pilot clips expose change scores and preserve gradual/local change evidence. | src/gates/change.py:113, tests/test_gate.py:42, tests/test_gate.py:103 (scores use the acknowledged reference; persistence covers short-lived changes instead of a recent-frame reference) | 🟢 |
 | 2 | Add persistence, hysteresis, cooldown and forced refresh with explicit trigger/skip reasons. | [Tasks](#tasks) | Each decision is traceable to its rule and configuration. | src/gates/change.py:133, app/main.py:160, tests/test_gate.py:111, tests/test_gate.py:126, tests/test_gate.py:141, tests/test_gate.py:179 | 🟢 |
-| 3 | Tune only on development clips and check small changes and lighting-only changes. | [Tasks](#tasks) | Held-out clips are not used to choose thresholds. | README.md:258, scripts/gate_sweep.py:60, tests/test_gate.py:37 (chosen on `real_thumbs_1` and the short clips; `real_thumbs_2` held out) | 🟢 |
-| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | README.md:258 | 🟢 |
+| 3 | Tune only on development clips and check small changes and lighting-only changes. | [Tasks](#tasks) | Held-out clips are not used to choose thresholds. | docs/app.md:235, scripts/gate_sweep.py:60, tests/test_gate.py:37 (chosen on `real_thumbs_1` and the short clips; `real_thumbs_2` held out) | 🟢 |
+| 4 | All acceptance criteria met | [Acceptance criteria](#acceptance-criteria) | All checkboxes ticked | docs/app.md:235 | 🟢 |
 
 <!-- impl-notes-anchor -->
