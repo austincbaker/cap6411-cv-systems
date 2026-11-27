@@ -42,7 +42,8 @@ Each run takes the clip length (585 s) plus about 20 s for server start and warm
 | `gate_sweep` | off | 6 | ~1 h 09 min | gate threshold 0.1 / 0.2 / 0.3 × check interval 0.5 / 1 s (3 persistence checks), 1 rep |
 | `image` | off | 4 | ~46 min | sent frame 384 / 768 px longer side × 64 / 32 max output tokens, fixed 2 s, 1 rep |
 | `quantization` | off | 2 | ~23 min | Q4_K_M model for fixed 2 s and gated 0.5 s (the main matrix is the Q8_0 side), 1 rep |
-| all blocks | | 21 | ~4 h 03 min | |
+| `budget` | off | 4 | ~46 min | energy-budget controller at 50%, 25% and 10% of the fixed 2 s spend, 0.5 s checks, plus one fixed 2 s run at 384 px to calibrate the reduced size (3 runs, ~35 min, when `image` is on) |
+| all blocks | | 24 | ~4 h 38 min | |
 
 Turn a block on by setting its `"enabled": true` in `configs/energy_suite.json`. The gate
 defaults were tuned for 0.5 s checks, so 1 s rows in the gate sweep are expected to call less
@@ -135,6 +136,46 @@ call count, median latency, package, system and battery power, and peak memory.
 
 - **Only some conditions or blocks:** `--only gated_0.5s fixed_2s` or `--only gate_sweep`.
 
+## Budget block and calibration
+
+The `budget` block runs the app with `--policy budget`: the change gate still decides when
+something changed, and the energy-budget controller (`src/budget/`) decides whether, and at
+what image size, to call the VLM, so that its energy above the idle pipeline stays within a
+budget in Wh per hour (one Wh per hour is one watt). It needs the main matrix's idle and
+fixed 2 s runs from the same suite folder, so run it after (or together with) the main matrix.
+
+**Calibration.** Before each budget run the suite derives the controller's cost table from the
+suite's completed runs and writes `runs/suite-.../budget_costs.json`:
+
+- for each image size, joules per call above idle = (run mean power − mean idle power) ×
+  run time ÷ calls, averaged over the fixed-interval runs at that size (default output
+  bound, Q8_0), in the suite's headline domain (battery when unplugged);
+- the full size comes from the main matrix's `fixed_2s` runs; 384 px from the block's
+  `budget_calib_px384` run, or from the `image` block's 384 px / 64-token run when that block
+  is on; 768 px is added when the `image` block ran;
+- each entry also keeps the median call latency, which the controller uses to rescale a call
+  that ran slower than calibrated.
+
+To recompute the table on its own (for example after a resumed suite):
+
+```bash
+uv run python scripts/energy_suite.py calibrate runs/suite-YYYYMMDD-HHMM
+```
+
+Without the runs to calibrate from (for example `--only budget` in a new folder), the budget
+runs use the placeholder table in `configs/budget_costs.json`, and `suite_run.json` records
+`costs_placeholder: true` and why. Those runs are functional checks, not results.
+
+**Budgets.** `fractions_of_fixed` (default 0.5, 0.25, 0.1) are fractions of the calibrated
+fixed 2 s spend (full-size joules per call ÷ 2 s). They bracket the gated policy, which made
+about a fifth of the fixed policy's calls in the Mac mini pilot. For fixed values, list them in
+`budget_wh_per_hour` instead (or as well); each becomes a `budget_wh<value>` run.
+
+On a tight budget, a tick where the gate fires but the bucket is short is logged as
+`budget_deferred`; the change is kept and sent (at 768 or 384 px if only those fit) as soon as
+the bucket refills, and dropped only if it waits more than 10 s with no newer trigger. Every
+tick's decision, bucket level and estimated spend are in each run's `app/budget.jsonl`.
+
 ## Analysis
 
 ```bash
@@ -149,6 +190,11 @@ Writes into `runs/suite-.../analysis/`:
   Low Power Mode, brightness and thermal pressure.
 - `conditions.csv`: per condition, mean, standard deviation, min and max across reps.
 - `quality_vs_energy.png`, `energy_per_hour.png`, `calls_latency.png`.
+- With the budget block: `budget.csv` (per budget run: the budget, measured VLM energy above
+  idle and its ratio to the budget, the controller's estimated spend, calls, admit full /
+  reduced / defer / drop counts, gestures named at ±1 s), `budget.png` (measured energy vs
+  budget with the fixed and gated levels, and quality vs budget) and `budget_spend.png`
+  (estimated spend against the allowance over each run).
 
 The figures use one headline energy domain for the whole suite: battery V x I when every
 run has it (unplugged), else SMC system load, else powermetrics package; `headline_domain`

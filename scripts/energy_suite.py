@@ -4,6 +4,7 @@
     uv run python scripts/energy_suite.py prepare          # once: Metal llama.cpp + models
     uv run python scripts/energy_suite.py run --dry-run    # print the plan and runtime
     uv run python scripts/energy_suite.py run              # the whole matrix, unattended
+    uv run python scripts/energy_suite.py calibrate runs/suite-...  # budget cost table only
 
 ``run`` replays one clip in real time through ``python -m app.main`` for every condition in
 ``configs/energy_suite.json`` (reps interleaved, one llama-server at a time, restarted and
@@ -22,6 +23,15 @@ powermetrics needs root: ``run`` asks for the sudo password once in the terminal
 ``caffeinate`` keeps the laptop and display awake for the whole suite. A run directory that
 already has a complete ``suite_run.json`` is skipped by ``--resume``; nothing is overwritten.
 Turn the results into a table and figures with ``scripts/analyze_energy_suite.py``.
+
+The optional ``budget`` block runs the energy-budget controller (``--policy budget``, items
+3a/3c). Before each budget run the suite calibrates: from the completed fixed-interval runs
+and the idle runs of the same suite it derives joules per call above idle for each image size
+and writes ``<suite>/budget_costs.json``, the table the controller reads (``calibrate`` does
+the same on its own). Budgets given as ``fractions_of_fixed`` are that fraction of the
+calibrated fixed-interval spend (full-size joules per call over ``reference_interval_s``).
+Without the runs to calibrate from, the repository's placeholder table is used and the run
+record says so.
 """
 
 from __future__ import annotations
@@ -48,6 +58,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if __package__ in (None, ""):
     sys.path.insert(0, str(ROOT))
 from energy import macos  # noqa: E402
+from scripts import analyze_energy_suite as analysis  # noqa: E402
 from scripts.gate_check import check_run  # noqa: E402
 from scripts.llama_runtime import CPU_FLAGS, digest  # noqa: E402
 
@@ -62,6 +73,8 @@ F16 = {
     "sha256": "80f7e3f04bc2d3324ac1a9f52f5776fe13a69912adf74f8e7edacf773d140d77",
 }
 LOCAL_QUANTS = ("Q4_K_M",)
+BUDGET_COSTS = "budget_costs.json"
+PLACEHOLDER_COSTS = ROOT / "configs/budget_costs.json"
 SERVER_START_S = 20.0  # runtime estimate per run: server start + warm-up
 
 
@@ -81,6 +94,8 @@ def expand(config: dict) -> list[dict]:
     runs = []
 
     def add(conditions: list[dict], reps: int, block: str) -> None:
+        if not conditions:
+            return
         for rep in range(1, reps + 1):
             shift = (rep - 1) % len(conditions)
             for condition in conditions[shift:] + conditions[:shift]:
@@ -130,6 +145,47 @@ def expand(config: dict) -> list[dict]:
             condition["server"] = {**condition.get("server", {}), "quant": q}
             conditions.append(condition)
         add(conditions, quant.get("reps", 1), "quantization")
+
+    budget = blocks.get("budget", {})
+    if budget.get("enabled"):
+        # Cost of each reduced size: a fixed-interval run at that size, unless the image block
+        # already has one at the default output bound.
+        covered = set()
+        if image.get("enabled") and image.get("policy", "fixed_interval") == "fixed_interval":
+            covered = {
+                side
+                for side, tokens in itertools.product(image["image_max_side"], image["max_tokens"])
+                if side and tokens >= max(image["max_tokens"])
+            }
+        calibration = [
+            {
+                "name": f"budget_calib_px{side}",
+                "policy": "fixed_interval",
+                "interval_s": float(budget.get("reference_interval_s", 2.0)),
+                "app_args": {"image_max_side": side},
+            }
+            for side in budget.get("calibrate_sizes", [])
+            if side not in covered
+        ]
+        add(calibration, 1, "budget")
+        conditions = [
+            {
+                "name": f"budget_f{fraction:g}",
+                "policy": "budget",
+                "interval_s": float(budget.get("interval_s", 0.5)),
+                "budget": {"fraction_of_fixed": float(fraction)},
+            }
+            for fraction in budget.get("fractions_of_fixed", [])
+        ] + [
+            {
+                "name": f"budget_wh{wh:g}",
+                "policy": "budget",
+                "interval_s": float(budget.get("interval_s", 0.5)),
+                "budget": {"wh_per_hour": float(wh)},
+            }
+            for wh in budget.get("budget_wh_per_hour", [])
+        ]
+        add(conditions, budget.get("reps", 1), "budget")
 
     for run in runs:
         run["name"] = f"{run['condition']['name']}_{run['rep']}"
@@ -505,10 +561,65 @@ def app_command(run: dict, video: Path, profile_path: Path, app_dir: Path, durat
     return command
 
 
+def write_cost_table(suite_dir: Path) -> dict:
+    """Calibrate from the suite's completed runs into ``<suite>/budget_costs.json``.
+
+    Returns ``{"path", "table", "error"}``; on failure (no idle or full-size fixed runs yet)
+    the path is the repository's placeholder table and ``error`` says why.
+    """
+    records = analysis.load_runs(suite_dir)
+    try:
+        table = analysis.calibrate(records, suite_dir.name)
+    except ValueError as exc:
+        return {
+            "path": PLACEHOLDER_COSTS,
+            "table": json.loads(PLACEHOLDER_COSTS.read_text()),
+            "error": str(exc),
+        }
+    path = suite_dir / BUDGET_COSTS
+    path.write_text(json.dumps(table, indent=2) + "\n")
+    return {"path": path, "table": table, "error": None}
+
+
+def resolve_budget(run: dict, suite_dir: Path, config: dict) -> tuple[dict, dict]:
+    """A budget run's condition with ``--budget-wh-per-hour`` and ``--budget-costs`` filled in
+    from a fresh calibration, plus the record of how they were chosen."""
+    block = config.get("blocks", {}).get("budget", {})
+    reference_s = float(block.get("reference_interval_s", 2.0))
+    costs = write_cost_table(suite_dir)
+    full = next(e for e in costs["table"]["entries"] if e["image_max_side"] is None)
+    reference_w = full["j_per_call"] / reference_s  # fixed-interval VLM spend above idle
+    spec = run["condition"]["budget"]
+    if "wh_per_hour" in spec:
+        wh = spec["wh_per_hour"]
+    else:
+        wh = spec["fraction_of_fixed"] * reference_w
+    condition = copy.deepcopy(run["condition"])
+    condition["app_args"] = {
+        **condition.get("app_args", {}),
+        "budget_wh_per_hour": round(wh, 6),
+        "budget_costs": str(costs["path"]),
+    }
+    info = {
+        "wh_per_hour": wh,
+        "fraction_of_fixed": spec.get("fraction_of_fixed"),
+        "reference_interval_s": reference_s,
+        "reference_fixed_wh_per_hour": reference_w,
+        "costs_path": str(costs["path"]),
+        "costs_placeholder": bool(costs["table"].get("placeholder")),
+        "calibration_error": costs["error"],
+        "cost_table": costs["table"],
+    }
+    return {**run, "condition": condition}, info
+
+
 def execute_run(run: dict, ctx: dict) -> dict:
     """One run: server up and warm, samplers on, app replay, samplers off, server down, scores."""
     config, profile = ctx["config"], ctx["profile"]
     run_dir: Path = ctx["suite_dir"] / run["name"]
+    budget_info = None
+    if run["condition"]["policy"] == "budget":
+        run, budget_info = resolve_budget(run, ctx["suite_dir"], config)
     run_dir.mkdir(parents=True)
     server_cfg = {**config["server"], **run["condition"].get("server", {})}
     quant = server_cfg.get("quant", profile["quantization"])
@@ -532,6 +643,8 @@ def execute_run(run: dict, ctx: dict) -> dict:
         "state_before": macos.system_state(),
         "complete": False,
     }
+    if budget_info is not None:
+        record["budget"] = budget_info
     url = f"http://{profile['host']}:{profile['port']}"
     if port_in_use(profile["host"], profile["port"]):
         raise RuntimeError(f"port {profile['port']} is busy: another llama-server is running")
@@ -605,6 +718,8 @@ def execute_run(run: dict, ctx: dict) -> dict:
             for line in (app_dir / "requests.jsonl").read_text().splitlines()
             if line.strip()
         ]
+    if budget_info is not None:
+        record["budget_summary"] = manifest.get("budget")
     record["calls"] = {
         "requests": len(requests),
         "ok": sum(r.get("status") == "ok" for r in requests),
@@ -824,6 +939,9 @@ def fmt(value) -> str:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="action", required=True)
+    cal = sub.add_parser("calibrate", help="write <suite>/budget_costs.json from its runs")
+    cal.add_argument("suite", type=Path)
+    cal.add_argument("--config", type=Path, default=ROOT / "configs/energy_suite.json")
     for name in ("prepare", "run"):
         p = sub.add_parser(name)
         p.add_argument("--profile", type=Path, default=ROOT / "configs/inference.json")
@@ -854,6 +972,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     battery.add_argument("--require-battery", dest="require_battery", action="store_true")
     args = parser.parse_args(argv)
     config = json.loads(args.config.read_text())
+    if args.action == "calibrate":
+        costs = write_cost_table(args.suite)
+        if costs["error"]:
+            print(f"calibration failed: {costs['error']}", file=sys.stderr)
+            return 2
+        for entry in costs["table"]["entries"]:
+            side = entry["image_max_side"] or "source"
+            print(
+                f"  image_max_side {side}: {entry['j_per_call']:.2f} J per call above idle, "
+                f"median latency {entry['latency_s']:.2f} s ({len(entry['runs'])} runs)"
+            )
+        print(f"wrote {costs['path']} ({costs['table']['domain']})")
+        return 0
     if args.action == "prepare":
         profile = json.loads(args.profile.read_text())
         quants = sorted(

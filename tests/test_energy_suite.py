@@ -69,7 +69,7 @@ def test_runtime_estimate_counts_server_start_and_cooldown():
 
 
 def test_app_command_passes_interval_and_condition_args(tmp_path):
-    run = suite.expand(all_blocks())[-5]  # an image-block run
+    run = next(r for r in suite.expand(all_blocks()) if r["block"] == "image")
     command = suite.app_command(run, Path("clip.mov"), Path("p.json"), tmp_path / "app", 30.0)
     assert command[command.index("--interval-s") + 1] == "2.0"
     assert command[command.index("--policy") + 1] == "fixed_interval"

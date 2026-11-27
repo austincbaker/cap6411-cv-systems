@@ -51,6 +51,15 @@
       "reps": 1,
       "quants": ["Q4_K_M"],
       "conditions": ["fixed_2s", "gated_0.5s"]
+    },
+    "budget": {
+      "enabled": false,
+      "reps": 1,
+      "interval_s": 0.5,
+      "reference_interval_s": 2.0,
+      "fractions_of_fixed": [0.5, 0.25, 0.1],
+      "budget_wh_per_hour": [],
+      "calibrate_sizes": [384]
     }
   }
 }

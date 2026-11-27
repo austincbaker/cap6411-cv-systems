@@ -11,6 +11,13 @@ are listed with ``complete=False`` and left out of the condition means) and writ
                       median and p90 latency, peak server memory, gate_check quality
 - ``conditions.csv``  per condition: mean and standard deviation across reps
 - ``quality_vs_energy.png``, ``energy_per_hour.png``, ``calls_latency.png``
+- with a ``budget`` block: ``budget.csv`` (per budget run: budget, measured VLM energy above
+  idle, the controller's estimated spend, quality and decision counts), ``budget.png``
+  (measured vs budget, quality vs budget) and ``budget_spend.png`` (estimated spend against
+  the allowance over time, from each run's ``app/budget.jsonl``)
+
+``calibrate()`` turns the same rows into the controller's cost table (joules per call above
+idle per image size); ``scripts/energy_suite.py calibrate`` writes it.
 
 Energy domains stay separate (AGENTS.md): ``package`` is powermetrics CPU+GPU+ANE,
 ``system`` the SMC system-load telemetry and ``battery`` voltage x current while unplugged,
@@ -46,6 +53,7 @@ BLOCK_COLOR = {  # categorical slots in fixed order
     "gate_sweep": "#f47230",
     "image": "#00b894",
     "quantization": "#f2a600",
+    "budget": "#7e57c2",
 }
 TEXT = "#333333"
 MUTED = "#8a8a8a"
@@ -102,6 +110,39 @@ RUN_COLUMNS = [
     "power_source",
     "low_power_mode",
     "display_brightness",
+    "budget_wh_per_hour",
+    "budget_fraction_of_fixed",
+    "budget_costs_placeholder",
+    "est_spend_wh_per_hour",
+    "measured_over_budget",
+    "admit_full",
+    "admit_reduced",
+    "defer",
+    "drop",
+]
+BUDGET_COLUMNS = [
+    "run",
+    "condition",
+    "rep",
+    "complete",
+    "budget_wh_per_hour",
+    "budget_fraction_of_fixed",
+    "budget_costs_placeholder",
+    "headline_domain",
+    "incremental_w",
+    "measured_over_budget",
+    "est_spend_wh_per_hour",
+    "calls",
+    "calls_per_hour",
+    "admit_full",
+    "admit_reduced",
+    "defer",
+    "drop",
+    "windows",
+    "windows_named",
+    "named_fraction",
+    "outside_calls",
+    "latency_median_s",
 ]
 SUMMARY_METRICS = [
     "calls_per_hour",
@@ -195,6 +236,18 @@ def run_row(record: dict) -> dict:
         "low_power_mode": state.get("low_power_mode"),
         "display_brightness": (state.get("display_brightness") or {}).get("value"),
     }
+    budget = record.get("budget") or {}
+    summary = record.get("budget_summary") or {}
+    decisions = summary.get("decisions") or {}
+    row.update(
+        {
+            "budget_wh_per_hour": budget.get("wh_per_hour"),
+            "budget_fraction_of_fixed": budget.get("fraction_of_fixed"),
+            "budget_costs_placeholder": budget.get("costs_placeholder"),
+            "est_spend_wh_per_hour": summary.get("estimated_spend_wh_per_hour"),
+            **{k: decisions.get(k) for k in ("admit_full", "admit_reduced", "defer", "drop")},
+        }
+    )
     # Mean power in W equals Wh per hour; battery uses its own sample span, so prefer its mean.
     if row["battery_mean_w"] is not None:
         row["battery_wh_per_hour"] = row["battery_mean_w"]
@@ -228,7 +281,66 @@ def add_derived(rows: list[dict]) -> Optional[str]:
             )
         else:
             row["incremental_w"] = row["incremental_j_per_call"] = None
+        budget = row.get("budget_wh_per_hour")
+        row["measured_over_budget"] = (
+            row["incremental_w"] / budget if budget and row["incremental_w"] is not None else None
+        )
     return domain
+
+
+def calibrate(records: list[dict], suite_name: str = "") -> dict:
+    """The budget controller's cost table from a suite's completed runs.
+
+    For every image size, joules per call above idle is the mean over the fixed-interval runs
+    at that size (default output bound) of incremental power x run time / calls, in the
+    suite's headline domain; ``latency_s`` is the mean of those runs' median call latency.
+    ValueError when there is no idle run or no full-size fixed run to calibrate from.
+    """
+    rows = [run_row(r) for r in records]
+    domain = add_derived(rows)
+    if domain is None or not any(r["complete"] and r["policy"] == "idle" for r in rows):
+        raise ValueError("no completed idle runs with energy to subtract")
+    default_tokens = {None}
+    tokens_seen = [r["max_tokens"] for r in rows if r["max_tokens"] is not None]
+    if tokens_seen:
+        default_tokens.add(max(tokens_seen))
+    groups: dict = {}
+    for row in rows:
+        if (
+            row["complete"]
+            and row["policy"] == "fixed_interval"
+            and row["max_tokens"] in default_tokens
+            and row["quant"] in (None, "Q8_0")
+            and row["incremental_j_per_call"] is not None
+            and row["incremental_j_per_call"] > 0
+        ):
+            groups.setdefault(row["image_max_side"], []).append(row)
+    if None not in groups:
+        raise ValueError("no completed full-size fixed-interval runs to calibrate from")
+    entries = []
+    for side in sorted(groups, key=lambda s: -(s or 10**9)):
+        members = groups[side]
+        latencies = [m["latency_median_s"] for m in members if m["latency_median_s"]]
+        entries.append(
+            {
+                "image_max_side": side,
+                "j_per_call": statistics.mean(m["incremental_j_per_call"] for m in members),
+                "latency_s": statistics.mean(latencies) if latencies else None,
+                "runs": [m["run"] for m in members],
+            }
+        )
+    # A smaller image that measured no cheaper than a larger one gives the controller no option.
+    for larger, smaller in zip(entries, entries[1:]):
+        if smaller["j_per_call"] >= larger["j_per_call"]:
+            smaller["note"] = "measured no cheaper than the next larger size"
+    return {
+        "table_version": 1,
+        "placeholder": False,
+        "source": f"energy suite {suite_name}: fixed-interval runs minus mean idle power",
+        "domain": DOMAIN_LABEL[domain],
+        "idle_runs": [r["run"] for r in rows if r["complete"] and r["policy"] == "idle"],
+        "entries": entries,
+    }
 
 
 def summarize(rows: list[dict]) -> list[dict]:
@@ -479,6 +591,126 @@ def figures(summary: list[dict], domain: Optional[str], out: Path, title: str) -
     return written
 
 
+def budget_figures(
+    budget: list[dict], rows: list[dict], domain: Optional[str], suite: Path, out: Path
+) -> list[Path]:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    written = []
+    done = sorted(
+        (r for r in budget if r["complete"] and r["budget_wh_per_hour"]),
+        key=lambda r: r["budget_wh_per_hour"],
+    )
+    references = {
+        "fixed_interval": [r for r in rows if r["complete"] and r["condition"] == "fixed_2s"],
+        "gated": [r for r in rows if r["complete"] and r["condition"] == "gated_0.5s"],
+    }
+    color = BLOCK_COLOR["budget"]
+
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.4), dpi=200)
+    for ax in axes:
+        _axes_style(ax)
+    x = [r["budget_wh_per_hour"] for r in done]
+    top = max(x + [r["incremental_w"] or 0 for r in done] + [0.1]) * 1.15
+    ax = axes[0]
+    ax.plot([0, top], [0, top], color=MUTED, linestyle="--", linewidth=1)
+    ax.annotate("on budget", (top * 0.62, top * 0.62), xytext=(4, -10), textcoords="offset points",
+                fontsize=7, color=MUTED)  # fmt: skip
+    measured = [
+        (r["budget_wh_per_hour"], r["incremental_w"])
+        for r in done
+        if r["incremental_w"] is not None
+    ]
+    if measured:
+        ax.plot(*zip(*measured), "o", color=color, markersize=7, markeredgecolor="white",
+                markeredgewidth=1.5, label="measured")  # fmt: skip
+    estimated = [
+        (r["budget_wh_per_hour"], r["est_spend_wh_per_hour"])
+        for r in done
+        if r["est_spend_wh_per_hour"] is not None
+    ]
+    if estimated:
+        ax.plot(*zip(*estimated), "x", color=TEXT, markersize=6, label="controller estimate")
+    reference_levels = []
+    for name, members in references.items():
+        values = [m["incremental_w"] for m in members if m["incremental_w"] is not None]
+        if values:
+            level = statistics.mean(values)
+            reference_levels.append(level)
+            ax.axhline(level, color=MUTED, linewidth=0.8)
+            ax.annotate(name.replace("_", " "), (0, level), xytext=(2, 3), textcoords="offset points",
+                        fontsize=7, color=MUTED)  # fmt: skip
+    ax.set_xlim(0, top)
+    ax.set_ylim(0, max([top] + [level * 1.1 for level in reference_levels]))
+    ax.set_xlabel("budget, Wh per hour above idle", fontsize=8, color=TEXT)
+    label = DOMAIN_LABEL.get(domain, "energy unavailable")
+    ax.set_ylabel(f"VLM energy above idle, Wh per hour\n({label})", fontsize=8, color=TEXT)
+    ax.legend(frameon=False, fontsize=7, labelcolor=TEXT, loc="lower right")
+    ax.set_title(f"Spend vs budget, {suite.name}", fontsize=9, color=TEXT, loc="left")
+
+    ax = axes[1]
+    named = [
+        (r["budget_wh_per_hour"], r["named_fraction"])
+        for r in done
+        if r["named_fraction"] is not None
+    ]
+    if named:
+        ax.plot(*zip(*named), "o-", color=color, markersize=7, markeredgecolor="white",
+                markeredgewidth=1.5)  # fmt: skip
+    for name, members in references.items():
+        values = [m["named_fraction"] for m in members if m["named_fraction"] is not None]
+        if values:
+            ax.axhline(statistics.mean(values), color=MUTED, linewidth=0.8)
+            ax.annotate(name.replace("_", " "), (0, statistics.mean(values)), xytext=(2, 3),
+                        textcoords="offset points", fontsize=7, color=MUTED)  # fmt: skip
+    ax.set_xlim(0, top)
+    ax.set_ylim(0, 1.05)
+    ax.set_xlabel("budget, Wh per hour above idle", fontsize=8, color=TEXT)
+    ax.set_ylabel("annotated gestures named (gate_check ±1 s)", fontsize=8, color=TEXT)
+    ax.set_title("Quality vs budget", fontsize=9, color=TEXT, loc="left")
+    fig.tight_layout()
+    path = out / "budget.png"
+    fig.savefig(path)
+    plt.close(fig)
+    written.append(path)
+
+    # Estimated spend against the allowance over time, one line pair per budget run.
+    fig, ax = plt.subplots(figsize=(6.0, 3.6), dpi=200)
+    _axes_style(ax)
+    shades = ["#4527a0", "#7e57c2", "#b39ddb", "#311b92", "#9575cd"]
+    for i, r in enumerate(done):
+        path = suite / r["run"] / "app" / "budget.jsonl"
+        if not path.exists():
+            continue
+        lines = [json.loads(t) for t in path.read_text().splitlines() if t.strip()]
+        ticks = [b for b in lines if b.get("host_tick_s") is not None]
+        if not ticks:
+            continue
+        origin = ticks[0]["host_tick_s"]
+        minutes = [(b["host_tick_s"] - origin) / 60 for b in ticks]
+        shade = shades[i % len(shades)]
+        ax.plot(minutes, [b["spent_j"] / 3600 for b in ticks], color=shade, linewidth=1.4,
+                label=f"{r['budget_wh_per_hour']:.2f} Wh/h")  # fmt: skip
+        ax.plot(minutes, [b["allowance_j"] / 3600 for b in ticks], color=shade, linewidth=0.9,
+                linestyle="--")  # fmt: skip
+    ax.set_xlabel("minutes into the clip", fontsize=8, color=TEXT)
+    ax.set_ylabel(
+        "Wh above idle (solid: estimated spend,\ndashed: allowance)", fontsize=8, color=TEXT
+    )
+    ax.legend(frameon=False, fontsize=7, labelcolor=TEXT, loc="upper left", title="budget",
+              title_fontsize=7)  # fmt: skip
+    ax.set_title(f"Controller spend over time, {suite.name}", fontsize=9, color=TEXT, loc="left")
+    fig.tight_layout()
+    path = out / "budget_spend.png"
+    fig.savefig(path)
+    plt.close(fig)
+    written.append(path)
+    return written
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("suite", type=Path)
@@ -506,9 +738,25 @@ def main(argv: Optional[list[str]] = None) -> int:
             f"  {s['condition']:28s} n={s['reps']}  calls/h {s['calls_per_hour_mean'] or 0:7.0f}  "
             f"energy {'-' if e is None else f'{e:.2f}'} Wh/h  named {s['windows_named_mean']}"
         )
+    budget = [r for r in rows if r["policy"] == "budget"]
+    if budget:
+        write_csv(out / "budget.csv", budget, BUDGET_COLUMNS)
+        print("  budget runs (measured VLM energy above idle vs budget, Wh per hour):")
+        for r in budget:
+            m, e = r["incremental_w"], r["est_spend_wh_per_hour"]
+            print(
+                f"    {r['run']:24s} budget {r['budget_wh_per_hour'] or 0:6.2f}  "
+                f"measured {'-' if m is None else f'{m:6.2f}'}  "
+                f"estimated {'-' if e is None else f'{e:6.2f}'}  named {r['windows_named']}  "
+                f"full/reduced/defer/drop {r['admit_full']}/{r['admit_reduced']}/"
+                f"{r['defer']}/{r['drop']}"
+            )
     if not args.no_figures:
         for path in figures(summary, domain, out, args.suite.name):
             print(f"  wrote {path}")
+        if budget:
+            for path in budget_figures(budget, rows, domain, args.suite, out):
+                print(f"  wrote {path}")
     print(f"  wrote {out / 'runs.csv'}, {out / 'conditions.csv'}")
     return 0
 
