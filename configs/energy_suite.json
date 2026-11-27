@@ -1,0 +1,56 @@
+{
+  "suite_version": 1,
+  "clip": {
+    "video_id": "thumbs_mov_1",
+    "path": "data/videos/thumbs_mov_1.mov",
+    "duration_s_estimate": 585
+  },
+  "annotations": "data/annotations/pilot.csv",
+  "tolerance_s": 1.0,
+  "reps": 3,
+  "cooldown_s": 90,
+  "battery_floor_percent": 20,
+  "require_battery": true,
+  "server": {
+    "backend": "metal",
+    "quant": "Q8_0",
+    "threads": 4,
+    "gpu_layers": 99,
+    "warmup_requests": 2,
+    "start_timeout_s": 180
+  },
+  "power": {
+    "powermetrics_interval_ms": 1000,
+    "powermetrics_samplers": "cpu_power,gpu_power,ane_power,thermal",
+    "battery_interval_s": 10,
+    "rss_interval_s": 1
+  },
+  "conditions": [
+    {"name": "idle", "policy": "idle", "interval_s": 0.5},
+    {"name": "fixed_2s", "policy": "fixed_interval", "interval_s": 2.0},
+    {"name": "gated_0.5s", "policy": "gated", "interval_s": 0.5}
+  ],
+  "blocks": {
+    "gate_sweep": {
+      "enabled": false,
+      "reps": 1,
+      "interval_s": [0.5, 1.0],
+      "threshold": [0.1, 0.2, 0.3],
+      "persist_checks": [3]
+    },
+    "image": {
+      "enabled": false,
+      "reps": 1,
+      "policy": "fixed_interval",
+      "interval_s": 2.0,
+      "image_max_side": [384, 768],
+      "max_tokens": [64, 32]
+    },
+    "quantization": {
+      "enabled": false,
+      "reps": 1,
+      "quants": ["Q4_K_M"],
+      "conditions": ["fixed_2s", "gated_0.5s"]
+    }
+  }
+}

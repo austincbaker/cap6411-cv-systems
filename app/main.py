@@ -6,7 +6,9 @@
 Every ``--interval-s`` seconds (ticks at ``t0 + k * interval`` on the monotonic
 clock, no drift) the newest source frame is sent to the VLM. With
 ``--policy gated`` (item 2a) a tick is sent only when ``gates.ChangeGate``
-triggers; gate skips go to ``drops.jsonl`` with origin ``gate``. At most one
+triggers; gate skips go to ``drops.jsonl`` with origin ``gate``. ``--policy idle`` runs
+the gate on every tick but never sends a request (every tick is logged as ``idle_no_call``
+with the gate's verdict in ``detail``): the pipeline's base cost for energy comparisons. At most one
 request is in flight. A tick that fires while a request is still running is
 skipped and logged as ``tick_skipped_busy`` with the frame ID it would have
 sent; nothing is queued. Source acquisition runs on its own thread, so slow
@@ -82,7 +84,7 @@ from vlm.prompts import (
 )
 
 SCHEMA_VERSION = CONTRACT_VERSION
-POLICIES = ("fixed_interval", "gated")
+POLICIES = ("fixed_interval", "gated", "idle")
 PREDICTIONS_FILE = "predictions.jsonl"
 WINDOW_NAME = "cap6411 baseline"
 SERVER_PROPERTY_KEYS = ("build_info", "model_path", "model_alias", "total_slots", "modalities")
@@ -151,7 +153,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--policy",
         choices=POLICIES,
         default="fixed_interval",
-        help="fixed_interval sends every tick; gated sends a tick only when the change gate triggers",
+        help="fixed_interval sends every tick; gated sends a tick only when the change gate "
+        "triggers; idle runs the gate on every tick but never sends (the pipeline's base cost)",
     )
     sched.add_argument(
         "--duration-s",
@@ -224,6 +227,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="read timeout per request (default: the profile's)",
     )
     req.add_argument("--jpeg-quality", type=int, choices=range(1, 101), metavar="1-100", default=85)
+    req.add_argument(
+        "--image-max-side",
+        type=positive_int,
+        help="shrink each sent frame so its longer side is at most this many pixels "
+        "(default: send the source resolution); the gate always sees the full frame",
+    )
     req.add_argument(
         "--server-idle-timeout-s",
         type=positive_float,
@@ -421,6 +430,16 @@ class LatestFrameSlot:
             return self._frame
 
 
+def shrink_to(image: np.ndarray, max_side: Optional[int]) -> np.ndarray:
+    """``image`` scaled down (aspect kept) so its longer side is at most ``max_side``."""
+    height, width = image.shape[:2]
+    if not max_side or max(height, width) <= max_side:
+        return image
+    scale = max_side / max(height, width)
+    size = (max(1, round(width * scale)), max(1, round(height * scale)))
+    return cv2.resize(image, size, interpolation=cv2.INTER_AREA)
+
+
 def encode_jpeg(image: np.ndarray, quality: int) -> bytes:
     ok, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)])
     if not ok:
@@ -512,7 +531,7 @@ class BaselineRun:
         self.state = ObservationState()
         self.scene = GestureScene()
         self.open_onset: Optional[str] = None  # prediction_id of the gesture onset still up
-        self.gate = ChangeGate(config.gate_config) if config.policy == "gated" else None
+        self.gate = ChangeGate(config.gate_config) if config.policy != "fixed_interval" else None
         self.slot = LatestFrameSlot()
         self.jobs: "queue.Queue[Optional[tuple]]" = queue.Queue(maxsize=1)
         self.results: "queue.Queue[dict]" = queue.Queue()
@@ -913,6 +932,18 @@ class BaselineRun:
                             "after a request with unknown server state"
                         )
                         self.source.stop()
+                elif self.config.policy == "idle":
+                    decision = self._gate_decision(frame, now)
+                    if decision.trigger:  # move the reference as if sent, so the gate keeps working
+                        self.gate.acknowledge(decision, now)
+                    self._log_tick_drop(
+                        "idle_no_call",
+                        tick_index,
+                        next_tick,
+                        frame,
+                        **{k: v for k, v in decision.log_fields().items() if k != "gate_reason"},
+                        detail=decision.reason,
+                    )
                 elif (
                     decision := self._gate_decision(frame, now)
                 ) is not None and not decision.trigger:
@@ -933,7 +964,10 @@ class BaselineRun:
                         self.state.bump(decision.reason)
                         gate_fields = decision.log_fields()
                     encode_start = time.monotonic()
-                    jpeg = encode_jpeg(frame.image, self.config.jpeg_quality)
+                    jpeg = encode_jpeg(
+                        shrink_to(frame.image, self.config.image_max_side),
+                        self.config.jpeg_quality,
+                    )
                     encode_s = time.monotonic() - encode_start
                     self.in_flight = {
                         "request_id": None,

@@ -85,7 +85,7 @@ The original Design choices remain settled. Stable identifiers below let item pl
 | D08 | Energy comparison | Idle, fixed, matched invocation, gate and budget modes; repeated main trials | Same; keep sensor domains and total/incremental energy separate | — |
 | D09 | Optimizations | Measure output/image/cache effects; no assumed visual-token saving | Same; unsupported controls remain unavailable | — |
 | D10 | Delivery scope | Four weeks; optional learned gate/viewer; no new VLM training | Same; 26 required items and one optional viewer | — |
-| D11 | Primary platform | Laptop/OS open | Ubuntu 22.04.5 LTS under WSL2 on the team laptop (rev. 6); results produced there count as experiment evidence | new decision; WSL2 rev. 6 |
+| D11 | Primary platform | Laptop/OS open | Ubuntu 22.04.5 LTS under WSL2 on the team laptop (rev. 6); report energy/quality comparisons from the macOS suite on Alejandro's Apple M2 MacBook Pro (rev. 10); results from different machines are reported separately | new decision; WSL2 rev. 6; MacBook rev. 10 |
 | D12 | Energy measurement | Qualified source | Whole-laptop battery energy on unplugged runs from native Windows.Devices.Power.BatteryReport, qualified 2026-10-27 in `docs/1b-battery-qualification.md`; WSL sysfs absolute scale unqualified; per-mode costs calibrated from long runs; package energy unavailable | source selected, rev. 7 |
 | D13 | Event derivation | Unassigned | `2b` normalizes validated per-frame observations and differences them against confirmed state; every policy shares it and `2d` documents it | new decision, rev. 6 |
 | D14 | Evaluation freeze | Freezes in `2d`, `2f` and `3h` | `2d`/`2f` produce version-1 contracts and templates; `3h` is the only evaluation freeze | new decision, rev. 6 |
@@ -563,3 +563,25 @@ README, data protocol, methodology, contract examples and repository guidance.
 Keep historical revision entries, measured artifacts and legacy runtime behavior
 intact. No dependency edges, priorities or issue states change. The local ownership
 text for 2c/2d is aligned with their existing live assignments to Austin and James.
+
+### Revision 10 — 2026-11-27 — Apple silicon MacBook energy platform
+
+**Trigger and authority:** Alejandro will run the energy and quality experiments on his
+Apple M2 MacBook Pro, replacing "team laptop only" for the final energy results (no team
+laptop app run exists before the 2026-11-30 deadline).
+
+**D11:** Energy, latency and quality comparisons for the report come from the macOS suite
+(`scripts/energy_suite.py`, `docs/energy_runbook.md`) on that MacBook, every policy on the
+same machine and settings. The WSL2 team laptop stays a valid platform and its item `1b`
+numbers stay as recorded; results from the two machines are reported separately and never
+mixed in one comparison.
+
+**Energy domains:** powermetrics CPU+GPU+ANE power (SoC package, not whole system), the
+SMC system-load telemetry (whole laptop, on AC or battery) and battery voltage x current
+while unplugged (whole laptop) are recorded and reported separately. Runs are unplugged,
+with brightness fixed, Low Power Mode recorded and an idle-pipeline condition (gate running,
+no VLM calls) as the incremental-energy baseline.
+
+**Propagation:** D11 row, `AGENTS.md` measurement rules, README options table
+(`--policy idle`, `--image-max-side`) and `docs/data-contracts.md` (`idle` policy). No
+dependency edges, priorities or issue states change.
