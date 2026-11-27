@@ -1,0 +1,12 @@
+{
+  "benchmark_id": "benchmark-test",
+  "policies": [
+    "fixed",
+    "gated"
+  ],
+  "sources": [
+    "data/videos/recording_1_thumbs.mov",
+    "data/videos/thumbs_mov_4.mov"
+  ],
+  "repeats": 2
+}
