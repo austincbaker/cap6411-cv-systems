@@ -120,8 +120,7 @@ labels run about a second off) returned that window's gesture. A false mention i
    grep ',thumbs_mov_1,' data/annotations/pilot.csv \
      | awk -F, 'BEGIN{print "label,onset_s,end_s"}{print $4","$5","$6}' > thumbs_mov_1.windows.csv
    uv run python scripts/gate_check.py runs/pilot/thumbs_mov_1-fixed runs/pilot/thumbs_mov_1-gated \
-       --windows thumbs_mov_1.windows.csv --tolerance-s 1 \
-       --name thumbs_up=thumb --name peace_sign="peace|v-sign|victory"
+       --windows thumbs_mov_1.windows.csv --tolerance-s 1
    ```
 
 Calls are serialized and a tick that arrives while a call is running is skipped, so call

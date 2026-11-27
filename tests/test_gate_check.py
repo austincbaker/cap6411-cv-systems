@@ -47,7 +47,7 @@ def test_choose_clips_filters_size_length_and_motion(tmp_path):
 def test_build_holds_first_frame_then_plays_and_writes_windows(tmp_path):
     clips = [("a", gesture_clip()), ("b", gesture_clip())]
     out = tmp_path / "replay.avi"
-    meta = build(clips, out, fps=4.0, segment_s=5.0, label="thumb_up")
+    meta = build(clips, out, fps=4.0, segment_s=5.0, label="thumbs_up")
     assert meta["frames"] == 40 and meta["duration_s"] == 10.0
     assert [s["clip_start_s"] for s in meta["segments"]] == [3.5, 8.5]  # 14 held frames each
     capture = cv2.VideoCapture(str(out))
@@ -55,8 +55,8 @@ def test_build_holds_first_frame_then_plays_and_writes_windows(tmp_path):
     capture.release()
     windows = read_windows(out.with_suffix(".windows.csv"))
     assert windows == [
-        {"label": "thumb_up", "onset_s": 3.5, "end_s": 5.0},
-        {"label": "thumb_up", "onset_s": 8.5, "end_s": 10.0},
+        {"label": "thumbs_up", "onset_s": 3.5, "end_s": 5.0},
+        {"label": "thumbs_up", "onset_s": 8.5, "end_s": 10.0},
     ]
     assert json.loads(out.with_suffix(".json").read_text())["segments"][1]["clip_id"] == "b"
 
@@ -94,13 +94,13 @@ def test_check_run_counts_hits_latency_names_and_outside(tmp_path):
         ],
         counts={"tick_skipped_busy": 3, "gate_change": 4, "requests": 6},
     )
-    windows = windows_csv(tmp_path / "w.csv", [["thumb_up", 5, 8], ["peace", 12, 14]])
-    report = check_run(tmp_path / "run", windows, 0.0, {"thumb_up": re.compile("thumb")})
+    windows = windows_csv(tmp_path / "w.csv", [["thumbs_up", 5, 8], ["peace_sign", 12, 14]])
+    report = check_run(tmp_path / "run", windows, 0.0, {"thumbs_up": re.compile("thumb")})
     first, second = report["windows"]
     assert (first["calls"], first["named"]) == (2, 1)
     assert round(first["first_latency_s"], 2) == 0.2
     assert round(first["first_named_latency_s"], 2) == 1.0
-    assert second["calls"] == 0 and second["named"] is None  # no pattern for peace
+    assert second["calls"] == 0 and second["named"] is None  # no pattern for peace_sign
     assert report["calls"] == 6 and report["ok"] == 5
     assert (report["windows_caught"], report["windows_named"]) == (1, 1)
     assert report["outside_times_s"] == [0.0, 8.0, 20.0]
@@ -125,12 +125,14 @@ def test_validated_answers_name_a_window_and_invalid_ones_never_do(tmp_path):
 
 def test_tolerance_widens_both_edges(tmp_path, capsys):
     fake_run(tmp_path / "run", "fixed_interval", [(3.6, "ok", "thumb"), (8.4, "ok", "thumb")])
-    windows_csv(tmp_path / "w.csv", [["thumb_up", 4, 8]])
+    windows_csv(tmp_path / "w.csv", [["thumbs_up", 4, 8]])
     assert main([str(tmp_path / "run"), "--windows", str(tmp_path / "w.csv"), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)[0]["windows"][0]["calls"] == 0
     args = [str(tmp_path / "run"), "--windows", str(tmp_path / "w.csv"), "--tolerance-s", "0.5"]
     assert main(args + ["--json"]) == 0
-    assert json.loads(capsys.readouterr().out)[0]["windows"][0]["calls"] == 2
+    report = json.loads(capsys.readouterr().out)[0]
+    assert report["windows"][0]["calls"] == 2
+    assert report["windows_named"] == 1  # the default names match the annotation labels
 
 
 def test_gate_sweep_models_busy_time_and_scores_windows(tmp_path):
