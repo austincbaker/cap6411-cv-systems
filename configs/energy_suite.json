@@ -53,7 +53,7 @@
       "conditions": ["fixed_2s", "gated_0.5s"]
     },
     "budget": {
-      "enabled": false,
+      "enabled": true,
       "reps": 1,
       "interval_s": 0.5,
       "reference_interval_s": 2.0,

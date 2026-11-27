@@ -30,7 +30,7 @@ def all_blocks() -> dict:
 
 
 def test_default_matrix_interleaves_and_rotates_reps():
-    runs = suite.expand(CONFIG)
+    runs = [r for r in suite.expand(CONFIG) if r["block"] == "main"]
     assert [r["name"] for r in runs] == [
         "idle_1",
         "fixed_2s_1",
@@ -42,7 +42,19 @@ def test_default_matrix_interleaves_and_rotates_reps():
         "idle_3",
         "fixed_2s_3",
     ]
-    assert {r["block"] for r in runs} == {"main"}
+
+
+def test_default_suite_runs_the_budget_block_after_the_main_matrix():
+    runs = suite.expand(CONFIG)
+    assert {r["block"] for r in runs} == {"main", "budget"}
+    blocks = [r["block"] for r in runs]
+    assert blocks == sorted(blocks, key=lambda b: b != "main")
+    assert [r["name"] for r in runs if r["block"] == "budget"] == [
+        "budget_calib_px384_1",
+        "budget_f0.5_1",
+        "budget_f0.25_1",
+        "budget_f0.1_1",
+    ]
 
 
 def test_optional_blocks_expand_to_their_grids():
@@ -64,8 +76,8 @@ def test_runtime_estimate_counts_server_start_and_cooldown():
     runs = suite.expand(CONFIG)
     plan = suite.estimate(runs, 585.0, 90.0)
     assert plan["per_run_s"] == 585.0 + suite.SERVER_START_S + 90.0
-    assert plan["total_s"] == pytest.approx(9 * plan["per_run_s"])
-    assert suite.hms(plan["total_s"]) == "1 h 44 min"
+    assert plan["total_s"] == pytest.approx(13 * plan["per_run_s"])
+    assert suite.hms(plan["total_s"]) == "2 h 31 min"
 
 
 def test_app_command_passes_interval_and_condition_args(tmp_path):

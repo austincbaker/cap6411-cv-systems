@@ -42,13 +42,15 @@ Each run takes the clip length (585 s) plus about 20 s for server start and warm
 | `gate_sweep` | off | 6 | ~1 h 09 min | gate threshold 0.1 / 0.2 / 0.3 × check interval 0.5 / 1 s (3 persistence checks), 1 rep |
 | `image` | off | 4 | ~46 min | sent frame 384 / 768 px longer side × 64 / 32 max output tokens, fixed 2 s, 1 rep |
 | `quantization` | off | 2 | ~23 min | Q4_K_M model for fixed 2 s and gated 0.5 s (the main matrix is the Q8_0 side), 1 rep |
-| `budget` | off | 4 | ~46 min | energy-budget controller at 50%, 25% and 10% of the fixed 2 s spend, 0.5 s checks, plus one fixed 2 s run at 384 px to calibrate the reduced size (3 runs, ~35 min, when `image` is on) |
+| `budget` | on | 4 | ~46 min | energy-budget controller at 50%, 25% and 10% of the fixed 2 s spend, 0.5 s checks, plus one fixed 2 s run at 384 px to calibrate the reduced size (3 runs, ~35 min, when `image` is on) |
 | all blocks | | 24 | ~4 h 38 min | |
 
-Turn a block on by setting its `"enabled": true` in `configs/energy_suite.json`. The gate
+The default suite (main matrix plus `budget`) is 13 runs, ~2 h 31 min. Turn a block on or off
+by setting its `"enabled"` in `configs/energy_suite.json`. The gate
 defaults were tuned for 0.5 s checks, so 1 s rows in the gate sweep are expected to call less
-and may miss gestures. Plan on one full charge for the main matrix; run optional blocks on a
-second charge (the suite stops by itself below 20% battery, see below).
+and may miss gestures. The main matrix runs first, then the budget block; if the battery
+reaches the 20% floor before the end, charge and `--resume` (see below). Run other optional
+blocks on a later charge.
 
 ## One-time setup (fresh clone)
 
