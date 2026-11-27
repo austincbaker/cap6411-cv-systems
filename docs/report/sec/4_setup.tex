@@ -1,0 +1,15 @@
+% Owner: Shawn (protocol, benchmarks; items 1f, 2f, 3f) and James (data; items 1e, 2e).
+\section{Experimental Setup}
+\label{sec:setup}
+\TODO{Experimental Setup prose: Shawn and James.}
+\begin{notes}{Shawn and James}
+\begin{itemize}\setlength\itemsep{0pt}
+\item \textbf{Data} (\texttt{data/README.md}, \texttt{data/annotations/pilot.csv}): James's session S1, fixed camera. \texttt{control} (idle), \texttt{recording\_1..4} ($\sim$10\,s, one gesture each), \texttt{thumbs\_mov\_1..6} (10 to 30\,min, mostly idle, two thumbs-ups each). The CSV holds 16 events (14 thumbs-up, 2 peace sign) in 10 videos; all one group, splits blank; pilot data only, no held-out split. Note \texttt{thumbs\_mov\_1/2} are the clips called \texttt{real\_thumbs\_1/2} elsewhere.
+\item \textbf{Event rule:} a shape held at least 0.5\,s; ends when the hand drops or the shape breaks; repeating after a drop is a new event; other hand motion is negative.
+\item \textbf{Policies:} fixed interval ($\Delta=2$\,s, every free check sent) and gated ($\Delta=0.5$\,s checks, gate defaults of Sec.~\ref{sec:gate}). The planned budget-aware policy was not built.
+\item \textbf{Metrics:} a window is \emph{caught} when a call lands inside it and \emph{named} when an answer inside it gives that window's gesture; a \emph{false mention} is a gesture answer outside every window; delay is onset to the first naming answer's availability time. Scored by \texttt{scripts/gate\_check.py} at $\pm1$\,s tolerance (annotations run about 1\,s off). The planned one-to-one event matcher (3d, 3e) was not built; say so.
+\item \textbf{Platforms:} team laptop, Ubuntu 22.04.5 under WSL2, CPU (the only platform for energy). Functional checks ran on a Mac mini (Apple silicon, CPU build of the same pinned llama.cpp and model) and carry no energy claims.
+\item \textbf{Energy source} (\texttt{docs/1b-battery-qualification.md}): Windows \texttt{BatteryReport} via PowerShell from WSL2, on battery only. Qualification run 270.6\,s: 3.089\,Wh drop; median reported power 41.2\,W idle, 37.4\,W under a 4-worker CPU load, 37.6\,W recovery; updates every 30 to 40\,s in steps of about 0.39\,Wh. It cannot attribute energy to single calls, and it did not show the CPU load.
+\item \textbf{Reproduction:} README commands; each run writes a new directory checked by \texttt{uv run contracts-check RUN\_DIR}.
+\end{itemize}
+\end{notes}

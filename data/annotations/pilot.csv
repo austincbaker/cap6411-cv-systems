@@ -5,7 +5,7 @@ schema_version,video_id,event_id,label,onset_s,end_s,group_id,split,annotator,no
 1-draft,recording_4_peace,E1,peace_sign,4.0,7.0,S1,,James,
 1-draft,thumbs_mov_1,E1,thumbs_up,110.0,115.0,S1,,James,
 1-draft,thumbs_mov_1,E2,thumbs_up,375.0,380.0,S1,,James,
-1-draft,thumbs_mov_2,E1,thumbs_up,147.0,153.0,S1,,James,
+1-draft,thumbs_mov_2,E1,thumbs_up,207.0,213.0,S1,,James,onset corrected from 147 s (James)
 1-draft,thumbs_mov_2,E2,thumbs_up,435.0,447.0,S1,,James,
 1-draft,thumbs_mov_3,E1,thumbs_up,80.0,88.0,S1,,James,
 1-draft,thumbs_mov_3,E2,thumbs_up,728.0,735.0,S1,,James,

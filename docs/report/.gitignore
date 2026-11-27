@@ -1,0 +1,10 @@
+# LaTeX build outputs; build with `tectonic -X compile main.tex --outdir build`.
+build/
+*.pdf
+*.aux
+*.log
+*.bbl
+*.blg
+*.out
+*.brf
+!figures/*.pdf

@@ -71,8 +71,8 @@ counts, and they carry no energy claim:
 
 | Policy | Check interval | VLM calls | Windows named (±1 s) | Windows with a call | False mentions |
 |---|---|---|---|---|---|
-| Fixed | 2 s | 1,348 | 9/14 | 14/14 | 246 |
-| Gated | 0.5 s | 303 | 13/14 | 13/14 | 113 |
+| Fixed | 2 s | 1,348 | 10/14 | 14/14 | 245 |
+| Gated | 0.5 s | 303 | 14/14 | 14/14 | 112 |
 
 "Named" means a call on a frame inside the window (widened by 1 s each side, since the
 labels run about a second off) returned that window's gesture. A false mention is a
@@ -113,8 +113,15 @@ labels run about a second off) returned that window's gesture. A false mention i
    ```
 
    This writes `runs/pilot/quality.csv` (one row per run) and prints the totals per
-   policy, which should match the table above. It builds on `scripts/gate_check.py`,
-   which also checks one clip's runs at a time:
+   policy, which should match the table above. To draw the report's three figures from
+   the pass (the defaults read and overwrite the committed files under `docs/report/`):
+
+   ```bash
+   uv run python scripts/report_figures.py --scores runs/pilot/quality.csv \
+       --export-timeline runs/pilot --timeline runs/pilot/timeline.csv --out runs/pilot/figures
+   ```
+
+   Scoring builds on `scripts/gate_check.py`, which also checks one clip's runs at a time:
 
    ```bash
    grep ',thumbs_mov_1,' data/annotations/pilot.csv \

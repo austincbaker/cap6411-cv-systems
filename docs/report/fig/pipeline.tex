@@ -1,0 +1,46 @@
+% Pipeline figure (Alejandro). Stages match app/main.py, src/gates/change.py,
+% src/vlm/prompts.py and app/state.py.
+\begin{figure*}[t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\footnotesize,
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=11mm, inner sep=3pt, fill=#1},
+  box/.default=white,
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  skip/.style={-{Stealth[length=1.6mm]}, gray, dashed},
+  lab/.style={font=\scriptsize, gray!40!black, align=center},
+  node distance=8mm
+]
+\node[box=gray!10] (cam) {Webcam or\\real-time replay};
+\node[box, right=of cam] (slot) {Latest-frame\\slot (one frame)};
+\node[box, right=of slot] (tick) {Check every $\Delta$\\$t_k=t_0+k\Delta$};
+\node[box=orange!12, right=of tick] (gate) {Change gate\\score $s$ vs.\ reference\\$\tau{=}0.3$, $k{=}3$, $T_{\min}{=}2$\,s};
+\node[box=blue!8, right=of gate] (vlm) {llama-server\\SmolVLM2-500M Q8\_0\\JSON-schema grammar};
+\node[box=orange!12, right=of vlm] (val) {Answer\\validation};
+\node[box=orange!12, right=of val] (scene) {Gesture\\scene state};
+
+\draw[arr] (cam) -- (slot);
+\draw[arr] (slot) -- (tick);
+\draw[arr] (tick) -- node[lab, above]{idle} (gate);
+\draw[arr] (gate) -- node[lab, above]{send} (vlm);
+\draw[arr] (vlm) -- (val);
+\draw[arr] (val) -- (scene);
+
+% Skips and feedback.
+\node[lab, below=7mm of tick] (busy) {busy: skip\\(nothing queued)};
+\draw[skip] (tick) -- (busy);
+\node[lab, below=7mm of gate] (gskip) {no change, persisting\\or cooldown: skip};
+\draw[skip] (gate) -- (gskip);
+\draw[skip] (vlm.north) to[bend right=22] node[lab, above]{sent frame becomes the reference} (gate.north);
+\node[lab, below=7mm of val] (unk) {invalid: unknown\\(never \texttt{none})};
+\draw[skip] (val) -- (unk);
+\node[lab, below=7mm of scene] (ev) {onset / offset\\events};
+\draw[arr] (scene) -- (ev);
+
+% Logs.
+\node[lab, below=15mm of vlm, text=black] (logs) {Run directory: requests, drops, predictions, power, manifest (versioned file contract)};
+\end{tikzpicture}}
+\caption{The assistant's pipeline. Orange stages are the parts described in Secs.~\ref{sec:gate} to \ref{sec:scene}. The fixed-interval baseline is the same pipeline with the gate removed, so it sends every check at which no request is in flight. Every skipped check is logged with its reason.}
+\label{fig:pipeline}
+\end{figure*}

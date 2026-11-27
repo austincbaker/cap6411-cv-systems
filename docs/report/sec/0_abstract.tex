@@ -1,0 +1,14 @@
+% Owner: James and Shawn (they coordinate the report, 4e plan, issue #25). Write last, about 150 words.
+\begin{abstract}
+\TODO{Abstract: James and Shawn, written last.}
+\begin{notes}{James and Shawn}
+\begin{itemize}\setlength\itemsep{0pt}
+\item Problem: an always-on webcam assistant that asks a compact VLM about every frame wastes compute and battery while nothing happens.
+\item Approach: a cheap frame-difference change gate decides when SmolVLM2-500M analyzes a frame; answers are schema-constrained and validated; a shared scene state turns answers into gesture onsets and offsets.
+\item Task: fixed-camera \texttt{thumbs\_up} and \texttt{peace\_sign} recognition (master plan revision 9).
+\item Headline functional check (Mac mini, 10 pilot clips): gated at 0.5\,s checks made 303 calls versus 1,348 for fixed 2\,s sampling and named 14 of 14 gestures versus 10 of 14 (Tab.~\ref{tab:pilot}, Figs.~\ref{fig:calls}--\ref{fig:timeline}).
+\item Energy: state what was measured, per the option chosen in Sec.~\ref{sec:energy}.
+\item Negative results are acceptable (course rubric): false gesture mentions on two clips (Sec.~\ref{sec:limitations}).
+\end{itemize}
+\end{notes}
+\end{abstract}

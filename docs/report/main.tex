@@ -1,0 +1,51 @@
+% CAP 6411 final report. Built on the official CVPR author kit
+% (https://github.com/cvpr-org/author-kit, commit 1fd5709); see README.md to build.
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+% Course report: camera-ready layout (no line numbers, authors shown) with page numbers.
+\usepackage[pagenumbers]{cvpr}
+
+\input{preamble}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,calc}
+\usepackage{tcolorbox}
+\tcbuselibrary{breakable}
+
+% Section owners' notes: facts the repository already supports, to be turned into prose.
+% Remove every notes box before submission.
+\newtcolorbox{notes}[1]{breakable,colback=yellow!8,colframe=orange!70!black,boxrule=0.4pt,
+  left=3pt,right=3pt,top=2pt,bottom=2pt,fonttitle=\footnotesize\bfseries,
+  title={Notes for #1 (delete before submission)},fontupper=\footnotesize}
+
+\definecolor{cvprblue}{rgb}{0.21,0.49,0.74}
+\usepackage[pagebackref,breaklinks,colorlinks,allcolors=cvprblue]{hyperref}
+
+\def\confName{CAP 6411}
+\def\confYear{Fall 2026}
+
+\title{When to Look: Change-Gated Invocation of a Compact\\Vision-Language Model for an Always-On Webcam Assistant}
+
+\author{Alejandro \TODO{surname} \and Austin \TODO{surname} \and James \TODO{surname} \and Shawn \TODO{surname}\\
+University of Central Florida\\
+{\tt\small \TODO{emails}}}
+
+\begin{document}
+\maketitle
+\input{sec/0_abstract}
+\input{sec/1_intro}
+\input{sec/2_related}
+\input{sec/3_method}
+\input{sec/4_setup}
+\input{sec/5_results}
+\input{sec/6_limitations}
+\input{sec/7_future}
+\input{sec/8_contributions}
+\input{sec/9_genai}
+{
+    \small
+    \bibliographystyle{ieeenat_fullname}
+    \bibliography{main}
+}
+\end{document}

@@ -1,0 +1,15 @@
+% Owner: Shawn (methods and related work, docs/methodology.md "Related work and research framing").
+% Every citation must come from arXiv or an official source; BibTeX lives in main.bib.
+\section{Related Work}
+\label{sec:related}
+\TODO{Related Work prose: Shawn. The methodology doc's related-work section is the source draft.}
+\begin{notes}{Shawn}
+\begin{itemize}\setlength\itemsep{0pt}
+\item \textbf{Compact VLMs.} SmolVLM~\cite{marafioti2025smolvlm} designs small VLMs for constrained devices (pixel shuffle to cut visual tokens; smallest 256M model under 1\,GB of GPU memory at inference). We run its SmolVLM2-500M video-instruct variant as a Q8\_0 GGUF in llama.cpp~\cite{llamacpp}. MobileVLM~\cite{chu2023mobilevlm} pairs 1.4B and 2.7B language models with an efficient projector and reports speed on a Snapdragon 888 CPU and a Jetson Orin. FastVLM~\cite{vasu2025fastvlm} attacks vision-encoder latency and visual token count with FastViTHD and reports a 3.2$\times$ faster time to first token in its LLaVA-1.5 setup.
+\item Point to make: these reduce the cost of one call; our system decides whether a call happens, and holds the model fixed while comparing policies.
+\item \textbf{Frame filtering for video queries.} NoScope~\cite{kang2017noscope} skips frames with cheap difference detectors and specialized models before running an expensive network. Our gate plays the same role in front of a VLM, with a persistence rule and a reference that moves only when a frame is sent.
+\item \textbf{Adaptive frame selection.} AdaFrame~\cite{wu2019adaframe} learns which frames to look at for video recognition. Ours is a fixed rule with no training.
+\item \textbf{Early exit and conditional computation.} BranchyNet~\cite{teerapittayanon2017branchynet} exits early from a network when confident; SkipNet~\cite{wang2018skipnet} learns to skip layers per input. Both save compute inside a model; our gate saves whole model calls.
+\item The methodology doc also discusses VideoBrain and PolyThrottle; add BibTeX from arXiv or the publisher if they stay.
+\end{itemize}
+\end{notes}
