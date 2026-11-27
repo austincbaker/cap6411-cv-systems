@@ -30,7 +30,7 @@
   `llama-server` (llama.cpp) running a compact SmolVLM-family model, CPU-first.
   The experiment platform is Ubuntu 22.04.5 LTS under WSL2 on the team
   laptop.
-- **Structure:** Planning documents live in `TODO_Plan/` and
+- **Structure:** Planning documents live in
   `energy-aware-vlm-implementation/` (see "Planning documents" below).
   Implemented components are `src/vlm/`, `src/energy/`, `src/capture/`,
   `src/contracts/`, `src/gates/`, `src/budget/` (energy-budget controller, items 3a/3c),
@@ -103,10 +103,8 @@ rather than duplicating it once those steps exist.
 
 ## Planning documents
 
-- `TODO_Plan/build-energy-aware-vlm-assistant.md` is the canonical master plan.
-  `energy-aware-vlm-implementation/plan.md` is its synchronized reading copy;
-  only the relative item links differ. Change both in the same commit and add
-  a revision-log entry for any decision change. Do not create a separate
+- `energy-aware-vlm-implementation/plan.md` is the master plan. Add a
+  revision-log entry for any decision change. Do not create a separate
   decisions file.
 - Each work item `1a`–`4g` has one plan file under
   `energy-aware-vlm-implementation/phase-*/` and one GitHub issue (#1–#27)

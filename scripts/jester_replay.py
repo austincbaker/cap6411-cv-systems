@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-frames", type=int, default=37)
     parser.add_argument("--fps", type=float, default=12.0, help="Jester frame rate (default 12)")
     parser.add_argument("--segment-s", type=float, default=15.0)
-    parser.add_argument("--label", default="thumb_up", help="label in the windows CSV")
+    parser.add_argument("--label", default="thumbs_up", help="label in the windows CSV")
     args = parser.parse_args(argv)
     if args.out.exists():
         parser.error(f"{args.out} exists; write each replay to a new path")

@@ -23,7 +23,7 @@ import re
 import sys
 from pathlib import Path
 
-DEFAULT_NAMES = {"thumb_up": r"thumb", "peace": r"peace|v[- ]sign|victory"}
+DEFAULT_NAMES = {"thumbs_up": r"thumb", "peace_sign": r"peace|v[- ]sign|victory"}
 
 
 def read_windows(path: Path) -> list[dict]:
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         metavar="LABEL=REGEX",
-        help="answer text that names LABEL (defaults: thumb_up=thumb, peace=peace|v-sign|victory)",
+        help="answer text that names LABEL (defaults: thumbs_up=thumb, peace_sign=peace|v-sign|victory)",
     )
     parser.add_argument("--json", action="store_true", help="print JSON instead of a table")
     args = parser.parse_args(argv)

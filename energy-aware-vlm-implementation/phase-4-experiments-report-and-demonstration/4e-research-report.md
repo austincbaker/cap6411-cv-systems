@@ -26,7 +26,7 @@ James and Shawn coordinate the final report; Austin and Alejandro provide and re
 
 ## Files to be touched
 
-- `docs/final_report.md` — Proposed final research report.
+- `docs/report/` — Proposed final research report.
 
 ## Source references (if porting)
 

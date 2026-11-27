@@ -62,63 +62,11 @@ is a new onset.
 
 ## Running the app on a video
 
-From the repo root, after `uv sync --extra dev` and
-`uv run python scripts/llama_runtime.py prepare` (first time only).
+The main README's "Reproduce the main numbers" section has the commands: start the
+model server, replay the annotated clips with `scripts/run_pilot_eval.py` under each
+policy (fixed every 2 s, gated checked every 0.5 s; always pass `--interval-s`), and score
+them with `scripts/score_pilot_eval.py`. `scripts/gate_check.py` checks one clip's runs
+against its windows from `annotations/pilot.csv`.
 
-1. Start the model server in its own terminal and leave it running:
-
-   ```bash
-   uv run python scripts/llama_runtime.py serve
-   ```
-
-   Check it with `curl -s http://127.0.0.1:8080/health` (expect `{"status":"ok"}`).
-   If it fails with "couldn't bind ... port 8080", a server is already running;
-   use it, or stop it with `pkill -f llama-server`.
-
-2. In a second terminal, run a video. **Each `--run-dir` must be a new folder name**,
-   otherwise the app exits without running.
-
-   ```bash
-   # fixed: ask the VLM every tick
-   uv run python -m app.main --source replay --video data/videos/recording_1_thumbs.mov \
-       --interval-s 2 --no-display --run-dir results/rec1_fixed
-
-   # gated: ask only when the change gate fires
-   uv run python -m app.main --source replay --video data/videos/recording_1_thumbs.mov \
-       --policy gated --interval-s 1 --no-display --run-dir results/rec1_gated
-   ```
-
-   Replay runs in real time: a 20-minute video takes 20 minutes. Use `tmux` for long
-   videos, or `--duration-s 300` to stop early. The last line ends in `exit=0` on success.
-
-3. See what the VLM said and when (`gesture` is the checked answer; it is empty when
-   the answer did not validate, and `answer_error` says why):
-
-   ```bash
-   python3 -c "import json;[print(round(r['source_time_s'],1), r['status'], r['gesture'], r['answer_error']) for r in map(json.loads, open('results/rec1_fixed/requests.jsonl'))]"
-   ```
-
-4. Check whether the VLM looked during each gesture and named it. There is no event
-   scorer yet (item 3d); `scripts/gate_check.py` checks requests against one video's
-   windows at a time:
-
-   ```bash
-   grep ',recording_1_thumbs,' data/annotations/pilot.csv \
-     | awk -F, 'BEGIN{print "label,onset_s,end_s"}{print $4","$5","$6}' > /tmp/rec1_windows.csv
-   uv run python scripts/gate_check.py results/rec1_fixed results/rec1_gated \
-       --windows /tmp/rec1_windows.csv --tolerance-s 1 \
-       --name thumbs_up=thumb --name peace_sign="peace|v-sign|victory"
-   ```
-
-   "windows caught" means a frame inside the gesture was sent; "named" means the
-   checked answer was that gesture.
-
-### Notes from the pilot runs
-
-- One VLM answer takes about 3.7-5 s on the CPU server, so `--interval-s 2` actually
-  looks every 4-6 s. Skipped ticks are logged as `tick_skipped_busy` in `drops.jsonl`.
-- Every request asks the gesture question, and the answer is constrained to
-  `{"hands": "<a few words>", "gesture": "thumbs_up" | "peace_sign" | "none"}` (item 2c).
-- Hold gestures 5+ s and start them at least 5 s into a recording, or the sampler may miss them.
-  Example: on one fixed 2 s run of `recording_1_thumbs` the VLM looked at 4 s and 10 s and
-  never saw the 5-8 s thumbs up.
+When recording new clips, hold gestures 5+ s and start them at least 5 s into the
+recording, or a fixed 2 s sampler may miss them.

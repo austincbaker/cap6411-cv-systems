@@ -27,7 +27,7 @@ Owners: Austin and Shawn. Interpret the energy controller's observed behavior an
 
 ## Files to be touched
 
-- `docs/final_report.md` — Budget adherence and limitations.
+- `docs/report/` — Budget adherence and limitations.
 - `results/` — Generated budget/accounting summaries.
 
 ## Source references (if porting)

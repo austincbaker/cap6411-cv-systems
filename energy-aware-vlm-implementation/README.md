@@ -2,13 +2,15 @@
 
 This directory breaks the four-week research project into 27 owned work items: 26 required outcomes and one optional failure-review viewer. Ubuntu 22.04.5 LTS is the primary platform, with CPU-first local inference. This directory contains plans, not a working application.
 
+**At submission (2026-11-30):** the inference, telemetry, capture, application, gate, answer, scene-state, contract and budget items (`1a`–`1e`, `2a`–`2d`, `3a`, `3c`) are built or in use; the rest of phase 3 and all of phase 4 (plus `1f`, `2e`, `2f`) are future work. Each item's status line says what exists.
+
 ## Reading order and document authority
 
-1. Read [plan.md](./plan.md), the local reading copy of the [canonical master plan](../TODO_Plan/build-energy-aware-vlm-assistant.md).
+1. Read [plan.md](./plan.md), the master plan.
 2. Read the relevant phase README, then the owned item plans listed below.
 3. Review dependencies, acceptance criteria and the Definition-of-Done matrix before implementation.
 
-The original TODO is canonical. When decisions change, update it in place with a revision entry and refresh `plan.md`, rebasing only its relative item links. Do not introduce an independent decisions file. Repository source/test paths in plans are repository-relative and proposed until implemented.
+`plan.md` is canonical. When decisions change, update it in place with a revision entry. Do not introduce an independent decisions file. Repository source/test paths in plans are repository-relative and proposed until implemented.
 
 ## Directory layout
 
