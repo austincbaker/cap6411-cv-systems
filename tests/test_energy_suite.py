@@ -241,3 +241,73 @@ def test_analysis_falls_back_to_system_load_and_draws_figures(tmp_path):
     assert {r["headline_domain"] for r in rows} == {"system"}
     for name in ("quality_vs_energy.png", "energy_per_hour.png", "calls_latency.png"):
         assert (tmp_path / "out" / name).stat().st_size > 1000
+
+
+# ============================================================================ report suite
+
+REPORT = json.loads((ROOT / "configs/energy_suite_report.json").read_text())
+
+
+def test_report_suite_interleaves_every_block_and_keeps_full_clip_last():
+    runs = suite.expand(REPORT)
+    assert len({r["name"] for r in runs}) == len(runs)
+    assert [r["block"] for r in runs[-2:]] == ["full_clip", "full_clip"]
+    assert all(r["condition"].get("full_clip") for r in runs[-2:])
+    interleaved = runs[:-2]
+    conditions = {r["condition"]["name"] for r in interleaved}
+    assert len(conditions) == 19 and len(interleaved) == 95
+    # every condition runs once per round, so a battery stop leaves equal reps
+    for rep in range(1, 6):
+        assert {
+            r["condition"]["name"] for r in interleaved[(rep - 1) * 19 : rep * 19]
+        } == conditions
+    assert suite.expand(REPORT) == runs  # seeded: --resume sees the same order
+
+
+def test_report_suite_conditions_and_names():
+    by_name = {r["condition"]["name"]: r["condition"] for r in suite.expand(REPORT)}
+    assert by_name["fixed_8s"] == {
+        "name": "fixed_8s",
+        "policy": "fixed_interval",
+        "interval_s": 8.0,
+    }
+    assert by_name["gated_0.25s"]["policy"] == "gated" and "app_args" not in by_name["gated_0.25s"]
+    assert by_name["gated_0.5s_t0.1"]["app_args"] == {"gate_threshold": 0.1}
+    assert by_name["gated_0.5s_px256"]["app_args"] == {"image_max_side": 256}
+    assert by_name["fixed_2s_px512"]["interval_s"] == 2.0
+    # the image block's fixed 384 px runs replace the separate calibration run
+    assert "budget_calib_px384" not in by_name
+    assert {n for n in by_name if n.startswith("budget_")} == {
+        "budget_f0.05",
+        "budget_f0.02",
+        "budget_f0.01",
+    }
+
+
+def test_budget_runs_wait_for_idle_and_reference_fixed_runs():
+    runs = suite.expand(REPORT)
+    names = [r["name"] for r in runs]
+    ready = max(names.index("idle_1"), names.index("fixed_2s_1"))
+    assert all(names.index(n) > ready for n in names if n.startswith("budget_"))
+
+
+def test_full_clip_runs_ignore_the_duration_override(tmp_path):
+    run = next(r for r in suite.expand(REPORT) if r["block"] == "full_clip")
+    plan = suite.estimate([run], 180.0, 60.0, 585.0)
+    assert plan["total_s"] == pytest.approx(585 + suite.SERVER_START_S + 60)
+
+
+def test_calibration_can_force_package_domain_and_reference_interval(tmp_path):
+    suite_dir = write_suite(tmp_path)
+    fast = dict(CONFIG["conditions"][1], name="fixed_1s", interval_s=1.0)
+    record = fake_record(
+        "fixed_1s", fast, 1, package_w=9.0, system_w=20.0, battery_w=20.5, calls=600, named=2
+    )
+    (suite_dir / record["name"]).mkdir()
+    (suite_dir / record["name"] / "suite_run.json").write_text(json.dumps(record))
+    records = analyze.load_runs(suite_dir)
+    table = analyze.calibrate(records, domain="package", interval_s=2.0)
+    full = next(e for e in table["entries"] if e["image_max_side"] is None)
+    assert table["domain"] == analyze.DOMAIN_LABEL["package"]
+    assert full["j_per_call"] == pytest.approx(3.0 * 600 / 290)
+    assert all("fixed_1s_1" not in e["runs"] for e in table["entries"])

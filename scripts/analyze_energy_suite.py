@@ -54,6 +54,8 @@ BLOCK_COLOR = {  # categorical slots in fixed order
     "image": "#00b894",
     "quantization": "#f2a600",
     "budget": "#7e57c2",
+    "interval_sweep": "#e84393",
+    "full_clip": "#5d6d7e",
 }
 TEXT = "#333333"
 MUTED = "#8a8a8a"
@@ -254,16 +256,18 @@ def run_row(record: dict) -> dict:
     return row
 
 
-def headline_domain(rows: list[dict]) -> Optional[str]:
+def headline_domain(rows: list[dict], prefer: Optional[str] = None) -> Optional[str]:
     done = [r for r in rows if r["complete"]]
+    if prefer:
+        return prefer if done and all(r[f"{prefer}_mean_w"] is not None for r in done) else None
     for domain in DOMAINS:
         if done and all(r[f"{domain}_mean_w"] is not None for r in done):
             return domain
     return None
 
 
-def add_derived(rows: list[dict]) -> Optional[str]:
-    domain = headline_domain(rows)
+def add_derived(rows: list[dict], prefer: Optional[str] = None) -> Optional[str]:
+    domain = headline_domain(rows, prefer)
     idle = [
         r[f"{domain}_mean_w"]
         for r in rows
@@ -288,16 +292,23 @@ def add_derived(rows: list[dict]) -> Optional[str]:
     return domain
 
 
-def calibrate(records: list[dict], suite_name: str = "") -> dict:
+def calibrate(
+    records: list[dict],
+    suite_name: str = "",
+    domain: Optional[str] = None,
+    interval_s: Optional[float] = None,
+) -> dict:
     """The budget controller's cost table from a suite's completed runs.
 
     For every image size, joules per call above idle is the mean over the fixed-interval runs
     at that size (default output bound) of incremental power x run time / calls, in the
     suite's headline domain; ``latency_s`` is the mean of those runs' median call latency.
+    ``domain`` forces the energy domain (default: the headline domain); ``interval_s`` keeps only
+    fixed-interval runs at that interval.
     ValueError when there is no idle run or no full-size fixed run to calibrate from.
     """
     rows = [run_row(r) for r in records]
-    domain = add_derived(rows)
+    domain = add_derived(rows, domain)
     if domain is None or not any(r["complete"] and r["policy"] == "idle" for r in rows):
         raise ValueError("no completed idle runs with energy to subtract")
     default_tokens = {None}
@@ -309,6 +320,7 @@ def calibrate(records: list[dict], suite_name: str = "") -> dict:
         if (
             row["complete"]
             and row["policy"] == "fixed_interval"
+            and (interval_s is None or row["interval_s"] == interval_s)
             and row["max_tokens"] in default_tokens
             and row["quant"] in (None, "Q8_0")
             and row["incremental_j_per_call"] is not None
@@ -718,13 +730,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("suite", type=Path)
     parser.add_argument("--out", type=Path, help="output folder (default <suite>/analysis)")
     parser.add_argument("--no-figures", action="store_true")
+    parser.add_argument(
+        "--domain",
+        choices=DOMAINS,
+        help="headline energy domain (default: battery when every run has it, else system, "
+        "else package)",
+    )
     args = parser.parse_args(argv)
     records = load_runs(args.suite)
     if not records:
         print(f"no suite_run.json under {args.suite}", file=sys.stderr)
         return 2
     rows = [run_row(r) for r in records]
-    domain = add_derived(rows)
+    domain = add_derived(rows, args.domain)
+    if args.domain and domain is None:
+        print(f"not every complete run has {args.domain} energy", file=sys.stderr)
+        return 2
     summary = summarize(rows)
     out = args.out or args.suite / "analysis"
     out.mkdir(parents=True, exist_ok=True)

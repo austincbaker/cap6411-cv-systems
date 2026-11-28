@@ -18,8 +18,10 @@ powermetrics, battery/SMC telemetry and the server's memory. Each run is written
 - ``suite_run.json``  condition, server command, system state before/after, energy summary,
                       latency and the gate_check scores at the configured tolerance
 
-powermetrics needs root: ``run`` asks for the sudo password once in the terminal
-(``sudo -v``), keeps the sudo timestamp fresh while it runs, and never stores the password.
+powermetrics needs root: ``run`` first tries ``sudo -n powermetrics`` (works with a NOPASSWD
+sudoers rule for /usr/bin/powermetrics); only if that fails does it ask for the sudo password
+once in the terminal (``sudo -v``, never with ``--no-sudo-prompt``), keep the sudo timestamp
+fresh while it runs, and never store the password.
 ``caffeinate`` keeps the laptop and display awake for the whole suite. A run directory that
 already has a complete ``suite_run.json`` is skipped by ``--resume``; nothing is overwritten.
 Turn the results into a table and figures with ``scripts/analyze_energy_suite.py``.
@@ -42,6 +44,7 @@ import datetime as dt
 import itertools
 import json
 import os
+import random
 import signal
 import statistics
 import subprocess
@@ -88,53 +91,100 @@ def condition_name(prefix: str, **parts) -> str:
 
 
 def expand(config: dict) -> list[dict]:
-    """Every run of the suite in execution order: main matrix (reps interleaved, order rotated
-    each rep so no condition always runs first), then each enabled block."""
+    """Every run of the suite in execution order.
+
+    Default schedule: main matrix (reps interleaved, order rotated each rep so no condition
+    always runs first), then each enabled block in turn. With ``"schedule": "interleaved"`` every
+    condition of every block (except ``full_clip``) runs once per round in a seeded shuffled
+    order, so slow drift (temperature, battery level) spreads over all conditions; budget runs
+    are moved after the first idle and fixed runs they calibrate from. ``full_clip`` runs last.
+    """
     base = {c["name"]: c for c in config["conditions"]}
-    runs = []
+    groups: list[tuple[str, list[dict], int]] = []  # (block, conditions, reps), in order
 
     def add(conditions: list[dict], reps: int, block: str) -> None:
-        if not conditions:
-            return
-        for rep in range(1, reps + 1):
-            shift = (rep - 1) % len(conditions)
-            for condition in conditions[shift:] + conditions[:shift]:
-                runs.append({"block": block, "rep": rep, "condition": condition})
+        if conditions:
+            groups.append((block, conditions, reps))
 
     add(list(config["conditions"]), config["reps"], "main")
     blocks = config.get("blocks", {})
 
-    sweep = blocks.get("gate_sweep", {})
-    if sweep.get("enabled"):
+    interval = blocks.get("interval_sweep", {})
+    if interval.get("enabled"):
         conditions = [
             {
-                "name": condition_name("gate", i=float(i), t=float(t), p=int(p)),
-                "policy": "gated",
+                "name": f"fixed_{float(i):g}s",
+                "policy": "fixed_interval",
                 "interval_s": float(i),
-                "app_args": {"gate_threshold": t, "gate_persist_checks": p},
             }
-            for i, t, p in itertools.product(
-                sweep["interval_s"], sweep["threshold"], sweep["persist_checks"]
-            )
+            for i in interval["interval_s"]
         ]
+        add(conditions, interval.get("reps", 1), "interval_sweep")
+
+    sweep = blocks.get("gate_sweep", {})
+    if sweep.get("enabled"):
+        if "points" in sweep:  # explicit settings; omitted keys keep the app's defaults
+            conditions = []
+            for point in sweep["points"]:
+                i = float(point["interval_s"])
+                args, name = {}, f"gated_{i:g}s"
+                if point.get("threshold") is not None:
+                    args["gate_threshold"] = point["threshold"]
+                    name += f"_t{point['threshold']:g}"
+                if point.get("persist_checks") is not None:
+                    args["gate_persist_checks"] = int(point["persist_checks"])
+                    name += f"_p{int(point['persist_checks'])}"
+                condition = {"name": name, "policy": "gated", "interval_s": i}
+                if args:
+                    condition["app_args"] = args
+                conditions.append(condition)
+        else:
+            conditions = [
+                {
+                    "name": condition_name("gate", i=float(i), t=float(t), p=int(p)),
+                    "policy": "gated",
+                    "interval_s": float(i),
+                    "app_args": {"gate_threshold": t, "gate_persist_checks": p},
+                }
+                for i, t, p in itertools.product(
+                    sweep["interval_s"], sweep["threshold"], sweep["persist_checks"]
+                )
+            ]
         add(conditions, sweep.get("reps", 1), "gate_sweep")
 
     image = blocks.get("image", {})
+    image_conditions: list[dict] = []
     if image.get("enabled"):
-        conditions = []
-        for side, tokens in itertools.product(image["image_max_side"], image["max_tokens"]):
-            args = {"max_tokens": tokens}
-            if side:
-                args["image_max_side"] = side
-            conditions.append(
-                {
-                    "name": condition_name("image", px=side or "full", tok=tokens),
-                    "policy": image.get("policy", "fixed_interval"),
-                    "interval_s": float(image.get("interval_s", 2.0)),
-                    "app_args": args,
-                }
-            )
-        add(conditions, image.get("reps", 1), "image")
+        tokens_list = image.get("max_tokens") or [None]
+        if "conditions" in image:  # sizes applied to main-matrix conditions by name
+            for name, side, tokens in itertools.product(
+                image["conditions"], image["image_max_side"], tokens_list
+            ):
+                condition = copy.deepcopy(base[name])
+                args = dict(condition.get("app_args", {}))
+                if side:
+                    args["image_max_side"] = side
+                if tokens is not None:
+                    args["max_tokens"] = tokens
+                condition["name"] = f"{name}_px{side or 'full'}" + (
+                    f"_tok{tokens}" if tokens is not None and len(tokens_list) > 1 else ""
+                )
+                condition["app_args"] = args
+                image_conditions.append(condition)
+        else:
+            for side, tokens in itertools.product(image["image_max_side"], tokens_list):
+                args = {"max_tokens": tokens} if tokens is not None else {}
+                if side:
+                    args["image_max_side"] = side
+                image_conditions.append(
+                    {
+                        "name": condition_name("image", px=side or "full", tok=tokens),
+                        "policy": image.get("policy", "fixed_interval"),
+                        "interval_s": float(image.get("interval_s", 2.0)),
+                        "app_args": args,
+                    }
+                )
+        add(image_conditions, image.get("reps", 1), "image")
 
     quant = blocks.get("quantization", {})
     if quant.get("enabled"):
@@ -148,20 +198,27 @@ def expand(config: dict) -> list[dict]:
 
     budget = blocks.get("budget", {})
     if budget.get("enabled"):
-        # Cost of each reduced size: a fixed-interval run at that size, unless the image block
-        # already has one at the default output bound.
-        covered = set()
-        if image.get("enabled") and image.get("policy", "fixed_interval") == "fixed_interval":
-            covered = {
-                side
-                for side, tokens in itertools.product(image["image_max_side"], image["max_tokens"])
-                if side and tokens >= max(image["max_tokens"])
-            }
+        reference_s = float(budget.get("reference_interval_s", 2.0))
+        # Cost of each reduced size: a fixed-interval run at that size and the reference
+        # interval, unless the image block already has one at the default output bound.
+        all_tokens = [
+            c.get("app_args", {}).get("max_tokens")
+            for c in image_conditions
+            if c.get("app_args", {}).get("max_tokens") is not None
+        ]
+        covered = {
+            c["app_args"]["image_max_side"]
+            for c in image_conditions
+            if c["policy"] == "fixed_interval"
+            and c["interval_s"] == reference_s
+            and c.get("app_args", {}).get("image_max_side")
+            and c["app_args"].get("max_tokens") in (None, max(all_tokens, default=None))
+        }
         calibration = [
             {
                 "name": f"budget_calib_px{side}",
                 "policy": "fixed_interval",
-                "interval_s": float(budget.get("reference_interval_s", 2.0)),
+                "interval_s": reference_s,
                 "app_args": {"image_max_side": side},
             }
             for side in budget.get("calibrate_sizes", [])
@@ -187,9 +244,70 @@ def expand(config: dict) -> list[dict]:
         ]
         add(conditions, budget.get("reps", 1), "budget")
 
+    full = blocks.get("full_clip", {})
+    last: list[tuple[str, list[dict], int]] = []
+    if full.get("enabled"):
+        conditions = []
+        for name in full["conditions"]:
+            condition = copy.deepcopy(base[name])
+            condition["name"] = f"full_{name}"
+            condition["full_clip"] = True
+            conditions.append(condition)
+        last.append(("full_clip", conditions, full.get("reps", 1)))
+
+    runs: list[dict] = []
+    if config.get("schedule") == "interleaved":
+        seed = int(config.get("schedule_seed", 0))
+        for rep in range(1, max(reps for _, _, reps in groups) + 1):
+            batch = [
+                {"block": block, "rep": rep, "condition": condition}
+                for block, conditions, reps in groups
+                if reps >= rep
+                for condition in conditions
+            ]
+            random.Random(seed * 1000 + rep).shuffle(batch)
+            runs += batch
+        runs = _budget_after_calibration(runs, float(budget.get("reference_interval_s", 2.0)))
+    else:
+        for block, conditions, reps in groups:
+            _rotated(runs, block, conditions, reps)
+    for block, conditions, reps in last:
+        _rotated(runs, block, conditions, reps)
+
     for run in runs:
         run["name"] = f"{run['condition']['name']}_{run['rep']}"
     return runs
+
+
+def _rotated(runs: list[dict], block: str, conditions: list[dict], reps: int) -> None:
+    for rep in range(1, reps + 1):
+        shift = (rep - 1) % len(conditions)
+        for condition in conditions[shift:] + conditions[:shift]:
+            runs.append({"block": block, "rep": rep, "condition": condition})
+
+
+def _budget_after_calibration(runs: list[dict], reference_s: float) -> list[dict]:
+    """Move budget runs that would start before the first idle run and the first full-size
+    fixed run at the reference interval to just after both (calibration needs them)."""
+
+    def is_reference(run: dict) -> bool:
+        c = run["condition"]
+        return (
+            c["policy"] == "fixed_interval"
+            and c["interval_s"] == reference_s
+            and not c.get("app_args", {}).get("image_max_side")
+            and not c.get("server", {}).get("quant")
+        )
+
+    try:
+        first_idle = next(i for i, r in enumerate(runs) if r["condition"]["policy"] == "idle")
+        first_fixed = next(i for i, r in enumerate(runs) if is_reference(r))
+    except StopIteration:
+        return runs
+    ready = max(first_idle, first_fixed)
+    early = [r for r in runs[:ready] if r["condition"]["policy"] == "budget"]
+    rest = [r for r in runs[:ready] if r["condition"]["policy"] != "budget"]
+    return rest + [runs[ready]] + early + runs[ready + 1 :]
 
 
 def clip_duration(path: Path, fallback: float) -> tuple[float, str]:
@@ -204,13 +322,16 @@ def clip_duration(path: Path, fallback: float) -> tuple[float, str]:
     return float(fallback), "estimate"
 
 
-def estimate(runs: list[dict], run_s: float, cooldown_s: float) -> dict:
+def estimate(
+    runs: list[dict], run_s: float, cooldown_s: float, clip_s: Optional[float] = None
+) -> dict:
     per_run = run_s + SERVER_START_S + cooldown_s
     by_block: dict[str, dict] = {}
     for run in runs:
         block = by_block.setdefault(run["block"], {"runs": 0, "seconds": 0.0})
         block["runs"] += 1
-        block["seconds"] += per_run
+        full = run["condition"].get("full_clip") and clip_s
+        block["seconds"] += (clip_s + SERVER_START_S + cooldown_s) if full else per_run
     total = sum(b["seconds"] for b in by_block.values())
     return {"per_run_s": per_run, "blocks": by_block, "total_s": total}
 
@@ -561,15 +682,21 @@ def app_command(run: dict, video: Path, profile_path: Path, app_dir: Path, durat
     return command
 
 
-def write_cost_table(suite_dir: Path) -> dict:
+def write_cost_table(suite_dir: Path, config: Optional[dict] = None) -> dict:
     """Calibrate from the suite's completed runs into ``<suite>/budget_costs.json``.
 
     Returns ``{"path", "table", "error"}``; on failure (no idle or full-size fixed runs yet)
     the path is the repository's placeholder table and ``error`` says why.
     """
     records = analysis.load_runs(suite_dir)
+    block = (config or {}).get("blocks", {}).get("budget", {})
     try:
-        table = analysis.calibrate(records, suite_dir.name)
+        table = analysis.calibrate(
+            records,
+            suite_dir.name,
+            domain=block.get("calibration_domain"),
+            interval_s=block.get("calibrate_interval_s"),
+        )
     except ValueError as exc:
         return {
             "path": PLACEHOLDER_COSTS,
@@ -586,7 +713,7 @@ def resolve_budget(run: dict, suite_dir: Path, config: dict) -> tuple[dict, dict
     from a fresh calibration, plus the record of how they were chosen."""
     block = config.get("blocks", {}).get("budget", {})
     reference_s = float(block.get("reference_interval_s", 2.0))
-    costs = write_cost_table(suite_dir)
+    costs = write_cost_table(suite_dir, config)
     full = next(e for e in costs["table"]["entries"] if e["image_max_side"] is None)
     reference_w = full["j_per_call"] / reference_s  # fixed-interval VLM spend above idle
     spec = run["condition"]["budget"]
@@ -640,6 +767,7 @@ def execute_run(run: dict, ctx: dict) -> dict:
         "condition": run["condition"],
         "server_config": server_cfg,
         "started_wall_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "test_conditions": ctx.get("test_conditions"),
         "state_before": macos.system_state(),
         "complete": False,
     }
@@ -688,7 +816,8 @@ def execute_run(run: dict, ctx: dict) -> dict:
         sampler_rss.start()
 
         app_dir = run_dir / APP_DIR
-        command = app_command(run, ctx["video"], profile_path, app_dir, ctx["duration_s"])
+        duration_s = None if run["condition"].get("full_clip") else ctx["duration_s"]
+        command = app_command(run, ctx["video"], profile_path, app_dir, duration_s)
         record["app_command"] = command
         spawn = time.monotonic()
         with (run_dir / "app.log").open("wb") as log:
@@ -788,7 +917,7 @@ def run_suite(args: argparse.Namespace, config: dict) -> int:
     )
     run_s = min(duration[0], args.duration_s) if args.duration_s else duration[0]
     cooldown = config["cooldown_s"] if args.cooldown_s is None else args.cooldown_s
-    plan = estimate(runs, run_s, cooldown)
+    plan = estimate(runs, run_s, cooldown, duration[0])
     print_plan(runs, plan, video, duration)
     if args.dry_run:
         return 0
@@ -820,11 +949,21 @@ def run_suite(args: argparse.Namespace, config: dict) -> int:
     elif args.powermetrics_command:
         powermetrics = args.powermetrics_command.split()
     else:
-        print("powermetrics needs administrator rights; enter your password once:")
-        if subprocess.run(["sudo", "-v"]).returncode != 0:
-            print("error: sudo failed; nothing was run", file=sys.stderr)
+        # A NOPASSWD sudoers rule for powermetrics makes `sudo -n powermetrics` work as is;
+        # only ask for the password (sudo -v) when it does not.
+        working, error = powermetrics_preflight(samplers)
+        if working is not None:
+            print("powermetrics runs through sudo -n without a password; not asking for one")
+        elif args.no_sudo_prompt:
+            print(f"error: sudo -n powermetrics failed and --no-sudo-prompt is set: {error}")
             return 2
-        samplers, error = powermetrics_preflight(samplers)
+        else:
+            print("powermetrics needs administrator rights; enter your password once:")
+            if subprocess.run(["sudo", "-v"]).returncode != 0:
+                print("error: sudo failed; nothing was run", file=sys.stderr)
+                return 2
+            working, error = powermetrics_preflight(samplers)
+        samplers = working
         if samplers is None:
             print(f"error: powermetrics does not work here: {error}", file=sys.stderr)
             return 2
@@ -840,6 +979,9 @@ def run_suite(args: argparse.Namespace, config: dict) -> int:
         "samplers": samplers,
         "server_command": server_command,
         "windows": read_windows(ROOT / config["annotations"], config["clip"]["video_id"]),
+        "test_conditions": json.loads(args.conditions_json.read_text())
+        if args.conditions_json
+        else None,
     }
     manifest_path = suite_dir / SUITE_MANIFEST
     suite_manifest = {
@@ -847,6 +989,7 @@ def run_suite(args: argparse.Namespace, config: dict) -> int:
         "argv": sys.argv,
         "config": config,
         "git_commit": git_commit(),
+        "test_conditions": ctx["test_conditions"],
         "video": str(video),
         "clip_duration_s": duration,
         "duration_s_override": args.duration_s,
@@ -862,9 +1005,19 @@ def run_suite(args: argparse.Namespace, config: dict) -> int:
         "system_state": macos.system_state(),
     }
     if manifest_path.exists():
+        previous = json.loads(manifest_path.read_text())
+        resumes = previous.get("resumes", []) + [
+            {
+                "wall_utc": suite_manifest["started_wall_utc"],
+                "git_commit": suite_manifest["git_commit"],
+                "test_conditions": ctx["test_conditions"],
+                "system_state": suite_manifest["system_state"],
+            }
+        ]
         suite_manifest = {
-            **json.loads(manifest_path.read_text()),
+            **previous,
             "resumed_wall_utc": suite_manifest["started_wall_utc"],
+            "resumes": resumes,
         }
     manifest_path.write_text(json.dumps(suite_manifest, indent=2, default=str) + "\n")
 
@@ -961,6 +1114,17 @@ def main(argv: Optional[list[str]] = None) -> int:
     run.add_argument("--cooldown-s", type=float, help="override the config's cooldown")
     run.add_argument("--no-powermetrics", action="store_true", help="skip powermetrics (no sudo)")
     run.add_argument("--powermetrics-command", help="replace the powermetrics command (tests)")
+    run.add_argument(
+        "--conditions-json",
+        type=Path,
+        help="JSON describing how the machine was prepared (Wi-Fi, Bluetooth, display); "
+        "copied into suite_manifest.json and every suite_run.json as test_conditions",
+    )
+    run.add_argument(
+        "--no-sudo-prompt",
+        action="store_true",
+        help="never run sudo -v; fail if sudo -n powermetrics needs a password (detached runs)",
+    )
     battery = run.add_mutually_exclusive_group()
     battery.add_argument(
         "--allow-ac",

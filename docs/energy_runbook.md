@@ -213,6 +213,38 @@ cd runs && zip -r suite-YYYYMMDD-HHMM.zip suite-YYYYMMDD-HHMM && cd ..
 
 Do not commit `runs/`.
 
+## Report suite (unattended, machine prepared in code)
+
+`configs/energy_suite_report.json` is the larger matrix for report section 5.2: idle, fixed 2 s
+and gated 0.5 s, a fixed-interval sweep (1, 4, 8 s), sent image size 256 / 384 / 512 px for
+fixed 2 s and gated 0.5 s, gate settings (0.25 s and 1 s checks; threshold 0.2 and 0.1 at
+0.5 s) and the budget controller at 0.05 / 0.02 / 0.01 of the fixed spend, 5 reps each. With
+`"schedule": "interleaved"` every condition runs once per round in a seeded shuffled order
+(so drift and a battery stop spread evenly), budget runs wait for the first idle and fixed
+2 s runs, and the `full_clip` block (gated and fixed over the whole clip) runs last.
+Budget calibration uses the package domain at the 2 s interval (`calibration_domain`,
+`calibrate_interval_s`), since battery V x I is too noisy on 3-minute runs.
+
+With a NOPASSWD sudoers rule for `/usr/bin/powermetrics`, `run` no longer asks for a password
+(`sudo -n powermetrics` is tried first); `--no-sudo-prompt` makes it fail instead of prompting.
+
+`scripts/run_energy_suite_detached.sh [SUITE_DIR]` runs it unplugged from the current battery
+level: it records the battery level, turns Wi-Fi (`networksetup`) and Bluetooth (`blueutil`,
+`brew install blueutil`) off, turns auto-brightness off and holds brightness at 0.5
+(`scripts/macos_display.py`), writes `test_conditions.json` (copied into every run record;
+True Tone is left as it is), runs 3-minute replays, and on exit, error or signal turns Wi-Fi
+and Bluetooth back on and restores the brightness. It then analyses the suites (default and
+`--domain package` / `--domain system`), writes `docs/report/5.2-energy-results.md` with
+`scripts/energy_report_section.py`, and opens a draft PR. Start it detached:
+
+```bash
+python3 -c 'import os,sys; os.setsid(); os.execvp("bash", ["bash"] + sys.argv[1:])' \
+  scripts/run_energy_suite_detached.sh runs/report-YYYYMMDD-HHMM </dev/null >/dev/null 2>&1 &
+tail -f runs/report-YYYYMMDD-HHMM/wrapper.log runs/report-YYYYMMDD-HHMM/suite.log
+```
+
+It stops below 20% battery; run the same command with the same folder to resume.
+
 ## Troubleshooting
 
 - `port 8080 is busy`: another llama-server is running. Stop it if it is yours

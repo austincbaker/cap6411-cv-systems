@@ -87,8 +87,10 @@ rather than duplicating it once those steps exist.
   `uv run python scripts/analyze_energy_suite.py SUITE_DIR` writes its CSVs and
   figures; `uv run python scripts/energy_suite.py calibrate SUITE_DIR` writes the budget
   controller's cost table (`budget_costs.json`) from a suite's idle and fixed runs. See
-  `docs/energy_runbook.md` (powermetrics asks for sudo once; tests use
-  `tests/fakes/fake_powermetrics.py`).
+  `docs/energy_runbook.md` (powermetrics asks for sudo once unless a NOPASSWD rule covers it;
+  tests use `tests/fakes/fake_powermetrics.py`). The report suite is
+  `configs/energy_suite_report.json`, run unattended by `scripts/run_energy_suite_detached.sh`;
+  `scripts/energy_report_section.py SUITE...` writes `docs/report/5.2-energy-results.md`.
 - **Run a focused test:** After setup, run
   `uv run python -m pytest tests/test_inference_client.py -q` or replace the
   filename with the affected test module.
